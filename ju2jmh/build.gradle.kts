@@ -1,6 +1,6 @@
 plugins {
     java
-    id("me.champeau.jmh") version "0.6.6"
+    id("me.champeau.jmh") version "0.7.3"
 }
 
 dependencies {
@@ -13,6 +13,11 @@ dependencies {
     testImplementation("org.mockito:mockito-core:3.10.0")
     testImplementation("org.jacoco:org.jacoco.core:0.8.8")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:2.13.4.2")
+    jmh(files("../libs/jmh-core-1.37-all.jar"))
+    jmhImplementation(files("../libs/jmh-core-1.37-all.jar"))
+}
+configurations.all {
+    exclude(group = "org.openjdk.jmh", module = "jmh-core")
 }
 
 /*tasks.jmh {

@@ -1,6 +1,5 @@
 package banca;
 
-import listener.JacocoCoverageListener;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;

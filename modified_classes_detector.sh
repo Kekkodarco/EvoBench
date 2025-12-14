@@ -342,7 +342,7 @@ if [[ -n "$(git status --porcelain)" ]]; then
   # passata dal workflow (es: ${{ secrets.GITHUB_TOKEN }})
   if [[ -n "${ACTIONS_TOKEN:-}" ]]; then
     echo "[git] Imposto remote con token e faccio push..."
-    git remote set-url origin "https://AntonioTrovato:${ACTIONS_TOKEN}@github.com/AntonioTrovato/GradleProject.git"
+    git remote set-url origin "https://Kekkodarco:${ACTIONS_TOKEN}@github.com/Kekkodarco/GradleProject.git"
     git push origin main || {
       echo "[git] ERRORE nel push verso origin/main."
       exit 1
