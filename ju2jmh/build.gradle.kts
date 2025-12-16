@@ -4,18 +4,28 @@ plugins {
 }
 
 dependencies {
-    // Use JUnit 4.12 instead of JUnit 5, as 4 is the version we're targeting.
     val jUnit4Version: String by rootProject.extra
 
     testImplementation("junit", "junit", jUnit4Version)
     jmh("junit", "junit", jUnit4Version)
+
     implementation(project(":app"))
+
     testImplementation("org.mockito:mockito-core:3.10.0")
-    testImplementation("org.jacoco:org.jacoco.core:0.8.8")
-    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.13.4.2")
+
+    // JaCoCo coerente con app
+    testImplementation("org.jacoco:org.jacoco.core:0.8.12")
+    testImplementation("org.jacoco:org.jacoco.report:0.8.12")
+
+    // Jackson: evita 2.13.x (vulnerabilità) e allinea a 2.15.4
+    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.15.4")
+    testImplementation("com.fasterxml.jackson.core:jackson-core:2.15.4")
+    testImplementation("com.fasterxml.jackson.core:jackson-annotations:2.15.4")
+
     jmh(files("../libs/jmh-core-1.37-all.jar"))
     jmhImplementation(files("../libs/jmh-core-1.37-all.jar"))
 }
+
 configurations.all {
     exclude(group = "org.openjdk.jmh", module = "jmh-core")
 }

@@ -1,3 +1,4 @@
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension.Output
 
 plugins {
@@ -6,49 +7,52 @@ plugins {
 }
 
 jacoco {
-    toolVersion = "0.8.8"
+    toolVersion = "0.8.12"
 }
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:3.10.0")
+
+    // Serve SOLO perché i listener importano org.jacoco.core.*
+    testImplementation("org.jacoco:org.jacoco.core:0.8.12")
+    testImplementation("org.jacoco:org.jacoco.report:0.8.12")
+
     implementation("com.github.javaparser:javaparser-core:3.24.4")
-    testImplementation("org.jacoco:org.jacoco.core:0.8.8")
-    testImplementation("org.jacoco:org.jacoco.agent:0.8.8")
-    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.13.3")
+
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.15.4")
+    implementation("com.fasterxml.jackson.core:jackson-core:2.15.4")
+    implementation("com.fasterxml.jackson.core:jackson-annotations:2.15.4")
 }
 
-tasks.named<Test>("test") {
+tasks.test {
     useJUnit()
 
-    // run the JaCoCo Agent
+    // NON eseguirli come test (ma verranno comunque compilati)
+    exclude("**/JacocoCoverageListener*")
+    exclude("**/JacocoCoverageRunListener*")
+
     extensions.configure(JacocoTaskExtension::class.java) {
         output = Output.TCP_SERVER
         address = "localhost"
         isJmx = true
 
-        // Exclude classes that are not in the 'app/java/main' package
         excludes = listOf(
-            "**/test/**",       // Exclude any test classes
-            "**/generated/**",  // Exclude generated classes, if any
-            "**/jmh/java/**",
-            "net/**",
-            "org/**",
-            "com/**",
-            "worker/**"
+            "**/test/**",
+            "**/generated/**",
+            "**/jmh/**"
         )
     }
 }
 
 tasks.jacocoTestReport {
-    dependsOn(tasks.test)  // Assicurati che i benchmark siano eseguiti prima di generare il report
+    dependsOn(tasks.test)
     reports {
         xml.required.set(true)
         html.required.set(true)
     }
 }
 
-// Task per creare un JAR "fat" con tutte le dipendenze
 tasks.register<Jar>("fatJar") {
     group = "build"
     archiveClassifier.set("all")
@@ -57,10 +61,12 @@ tasks.register<Jar>("fatJar") {
 
     dependsOn(configurations.runtimeClasspath)
     from({
-        configurations.runtimeClasspath.get().filter { it.name.endsWith("jar") }.map { zipTree(it) }
+        configurations.runtimeClasspath.get()
+            .filter { it.name.endsWith("jar") }
+            .map { zipTree(it) }
     })
 
     manifest {
-        attributes["Main-Class"] = "ASTGenerator" // Assicurati che il nome completo della classe sia corretto
+        attributes["Main-Class"] = "ASTGenerator"
     }
 }

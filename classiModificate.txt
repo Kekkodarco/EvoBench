@@ -1,3 +1,0 @@
-com.esempio.ClassA
-com.esempio.ClassB
-com.esempio.ClassB.app

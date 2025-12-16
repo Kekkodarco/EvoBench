@@ -28,5 +28,8 @@
   "utente.personale.TecnicoTest.testSetSurname" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getSurname", "utente.personale.Tecnico.setSurname" ],
   "utente.personale.TecnicoTest.testSetProfession" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getProfession", "utente.personale.Tecnico.setProfession" ],
   "utente.personale.TecnicoTest.testSetCode" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.setCode", "utente.personale.Tecnico.getCode" ],
-  "utente.personale.TecnicoTest.testSetName" : [ "utente.personale.Tecnico.getName", "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.setName" ]
+  "utente.personale.TecnicoTest.testSetName" : [ "utente.personale.Tecnico.getName", "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.setName" ],
+  "banca.ContoBancarioTest.prelievo_saldoSufficiente" : [ "banca.ContoBancario.prelievo", "banca.ContoBancario.ContoBancario" ],
+  "banca.ContoBancarioTest.prelievo_saldoNegativo" : [ "banca.ContoBancario.prelievo", "banca.ContoBancario.ContoBancario" ],
+  "banca.ContoBancarioTest.prelievo_saldoNegativoSufficiente" : [ ]
 }
