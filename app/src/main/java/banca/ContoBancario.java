@@ -32,10 +32,8 @@ public class ContoBancario {
         this.saldo += quota;
     }
 
-    public void foo(){}
 
     public int prelievo(int quota) {
-        System.out.println("prova mod");
         if (this.saldo < quota)
             return 0;
         else
