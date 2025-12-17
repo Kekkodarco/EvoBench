@@ -32,6 +32,8 @@ public class ContoBancario {
         this.saldo += quota;
     }
 
+    public void foo(){}
+
     public int prelievo(int quota) {
         if (this.saldo < quota)
             return 0;
