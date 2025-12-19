@@ -57,6 +57,7 @@ public class UtenteTest {
     public void testSetContoBancario() {
         ContoBancario nuovoConto = Mockito.mock(ContoBancario.class);
         utente.setContoBancario(nuovoConto);
+        System.out.println("Modifica");
         assertEquals(nuovoConto, utente.getContoBancario());
     }
 }
