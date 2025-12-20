@@ -38,6 +38,7 @@ public class Utente {
 
     public void setName(String name) {
         this.name = name;
+        System.out.println("modifica");
     }
 
     public void setSurname(String surname) {
