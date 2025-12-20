@@ -47,8 +47,12 @@ public class Chat2UnitTestInputBuilder {
                 continue;
             }
 
-            Path javaFile = prodRootDir.resolve(ref.classFqn.replace('.', '/') + ".java").toAbsolutePath().normalize();
-            byFile.computeIfAbsent(javaFile.toString(), k -> new LinkedHashSet<>()).add(ref.methodName);
+            Path javaFile = prodRootDir.resolve(ref.classFqn.replace('.', '/') + ".java")
+                    .toAbsolutePath()
+                    .normalize();
+
+            String javaFileKey = javaFile.toString().replace('\\', '/'); // forza slash Unix anche su Windows
+            byFile.computeIfAbsent(javaFileKey, k -> new LinkedHashSet<>()).add(ref.methodName);
         }
 
         // Convert LinkedHashSet -> List per JSON

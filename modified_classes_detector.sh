@@ -1,58 +1,41 @@
 #!/bin/bash
 set -euo pipefail
 
-# ==============================================================================
-# Orchestratore pipeline (DRY-RUN / STUB first)
-# - Niente chiamate reali a Chat2UnitTest finché non lo decidi tu
-# - Struttura pronta per:
-#   i) modified -> rigenera test -> ju2jmh -> benchmark
-#   ii) deleted -> elimina test
-#   iii) added -> genera test -> aggiorna coverage -> ju2jmh -> benchmark
-# ==============================================================================
-
-# ===== Switch =================================================================
-DRY_RUN="${DRY_RUN:-1}"          # 1 = niente modifiche “vere” (consigliato ora)
-PUSH_ENABLED="${PUSH_ENABLED:-0}" # 1 = abilita push (solo quando sei pronto)
-
-# ===== Git identity ===========================================================
-git config user.name  "Kekkodarco" || true
-git config user.email "f.darco6@studenti.unisa.it" || true
-
-# ===== Paths (repo) ===========================================================
+# ===================== Config =================================================
 PROD_ROOT="app/src/main/java"
 TEST_ROOT="app/src/test/java"
-BENCH_ROOT="ju2jmh/src/jmh/java"
-
 COVERAGE_MATRIX_JSON="app/coverage-matrix.json"
 
-# AST fat jar
-AST_JAR="$(ls -1 app/build/libs/app-*-all.jar 2>/dev/null | head -n 1)"
-if [[ -z "$AST_JAR" ]]; then
-  echo "ERRORE: fatJar non trovato. Esegui: ./gradlew :app:fatJar"
-  exit 1
-fi
+AST_JAR="app/build/libs/app-all.jar"
+CHAT2UNITTEST_INPUT_BUILDER_CLASS="Chat2UnitTestInputBuilder"
+#attualmente sto usando un percorso locale per chat2unittest, successivamente dovra' essere modificato con una repo di github
+export RUN_CHAT2UNITTEST=1
+CHAT2UNITTEST_JAR="/c/Users/franc/IdeaProjects/chat2unittest/target/chat2unittest-1.0-SNAPSHOT-jar-with-dependencies.jar"
+CHAT2UNITTEST_HOST="https://uncourtierlike-louvered-katelin.ngrok-free.dev/v1/chat/completions"
+CHAT2UNITTEST_MODEL="codellama-7b-instruct-hf"
+CHAT2UNITTEST_TEMP="0.4"
+#numero massimo tentativi generazione test
+MAX_CHAT2UNITTEST_ATTEMPTS="${MAX_CHAT2UNITTEST_ATTEMPTS:-5}"
 
-# Output AST (quando lo modificherai per crearli tutti e 3)
 MODIFIED_METHODS_FILE="modified_methods.txt"
 ADDED_METHODS_FILE="added_methods.txt"
 DELETED_METHODS_FILE="deleted_methods.txt"
 
-# Chat2UnitTest input (generati dal builder)
 INPUT_MODIFIED_JSON="input_modified.json"
 INPUT_ADDED_JSON="input_added.json"
 
-# Chat2UnitTest input builder (classe nel jar)
-CHAT2UNITTEST_INPUT_BUILDER_CLASS="Chat2UnitTestInputBuilder"
+TESTS_TO_DELETE_FILE="tests_to_delete.txt"
+TESTS_TO_REGENERATE_FILE="tests_to_regenerate.txt"
 
-# Ju2Jmh
-JU2JMH_CONVERTER_JAR="./ju-to-jmh/converter-all.jar"
-OUTPUT_BENCH_CLASSES_FILE="ju2jmh/benchmark_classes_to_generate.txt"
+BENCH_ROOT="ju2jmh/src/jmh/java"
 
-# Repo remoto corretto (tuo)
-REMOTE_WITH_TOKEN="https://Kekkodarco:${ACTIONS_TOKEN:-}@github.com/Kekkodarco/GradleProject.git"
+# switch per step futuri (LLM/bench)
+RUN_CHAT2UNITTEST="${RUN_CHAT2UNITTEST:-1}"
+RUN_JU2JMH="${RUN_JU2JMH:-0}"
+RUN_AMBER="${RUN_AMBER:-0}"
 
-# ===== Utils ==================================================================
-sep() { printf '%*s\n' "90" '' | tr ' ' '-'; }
+# ===================== Utils ==================================================
+sep(){ printf '%*s\n' 90 '' | tr ' ' '-'; }
 
 sanitize_line() {
   local s="$1"
@@ -60,257 +43,355 @@ sanitize_line() {
   printf "%s" "$(echo -n "$s" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 }
 
-ensure_file_or_empty() {
-  # crea file vuoto se non esiste (così la pipeline non esplode)
+fqn_to_test_path() {
+  local test_class_fqn="$1"
+  echo "$TEST_ROOT/$(echo "$test_class_fqn" | tr '.' '/')".java
+}
+
+ensure_file() {
   local f="$1"
-  [[ -f "$f" ]] || : > "$f"
+  : > "$f"
 }
 
-update_coverage_for_classes_with_retry() {
-  # Esegue ./gradlew :app:test solo sulle test-class associate alle classi di produzione modificate.
-  # Convenzione: <ProdFQN> -> <ProdFQN>Test
-  # Retry fino a 10: in futuro, dentro il loop ci metterai la rigenerazione Chat2UnitTest.
+# Estrae classi test uniche da file con righe tipo: banca.ContoBancarioTest.testX
+extract_test_classes() {
+  local tests_file="$1"
+  [[ -s "$tests_file" ]] || return 0
 
-  local -a PROD_CLASSES=("${@}")
+  while IFS= read -r line; do
+    line="$(sanitize_line "$line")"
+    [[ -z "$line" ]] && continue
+    # rimuove solo l'ultimo segmento dopo l'ultimo punto (il nome del metodo test)
+    echo "${line%.*}"
+  done < "$tests_file" | sort -u
+}
 
-  if ((${#PROD_CLASSES[@]} == 0)); then
-    echo "[coverage] Nessuna classe modificata: skip."
+# Converte lista di classi test in argomenti gradle: --tests "A" --tests "B"
+build_gradle_tests_args() {
+  local classes_file="$1"
+  local args=()
+  while IFS= read -r c; do
+    c="$(sanitize_line "$c")"
+    [[ -z "$c" ]] && continue
+    args+=( --tests "$c" )
+  done < "$classes_file"
+  printf "%s\n" "${args[@]}"
+}
+
+# ===================== Step 1: Modified Classes Extractor =====================
+extract_modified_classes() {
+  sep
+  echo "[1] Extract modified classes via git diff --name-only..."
+
+  local files
+  #files="$(git diff --name-only HEAD^ HEAD -- app/src/main/java || true)"
+  #files per non effettuare sempre il commit per testare le varie branches
+  files="$(git diff --name-only HEAD -- app/src/main/java || true)"
+
+  if [[ -z "${files//[[:space:]]/}" ]]; then
+    echo "[1] Nessuna classe modificata in app/src/main/java. Stop."
+    exit 0
+  fi
+
+  # trasforma app/src/main/java/pkg/Class.java -> pkg.Class
+  local -a modified_classes=()
+  while IFS= read -r f; do
+    f="$(sanitize_line "$f")"
+    [[ -z "$f" ]] && continue
+    [[ "$f" != *.java ]] && continue
+
+    f="${f#app/src/main/java/}" #rimuove prefisso
+    if [[ "$f" != */* ]]; then
+      continue
+    fi
+    f="${f%.java}"                  # rimuove estensione
+    f="${f//\//.}"                  # / -> .
+    modified_classes+=("$f")
+  done <<< "$files"
+
+  # uniq
+  mapfile -t modified_classes < <(printf "%s\n" "${modified_classes[@]}" | sort -u)
+
+  printf "%s\n" "${modified_classes[@]}" > modified_classes.txt
+  echo "[1] Written modified_classes.txt:"
+  cat modified_classes.txt
+}
+
+# ===================== Step 2: AST -> 3 files ================================
+run_ast() {
+  sep
+  echo "[2] Run ASTGenerator (creates modified/added/deleted files)..."
+
+  if [[ ! -f "$AST_JAR" ]]; then
+    echo "[2] ERROR: $AST_JAR not found. Build fatJar first."
+    exit 1
+  fi
+
+  # PULIZIA PRIMA
+    : > "$MODIFIED_METHODS_FILE"
+    : > "$ADDED_METHODS_FILE"
+    : > "$DELETED_METHODS_FILE"
+
+  java -jar "$AST_JAR" modified_classes.txt
+
+  echo "[2] Lines:"
+  echo " - modified: $(wc -l < "$MODIFIED_METHODS_FILE" | tr -d ' ')"
+  echo " - added:    $(wc -l < "$ADDED_METHODS_FILE" | tr -d ' ')"
+  echo " - deleted:  $(wc -l < "$DELETED_METHODS_FILE" | tr -d ' ')"
+}
+
+# ===================== Step 3: Build input json (MODIFIED/ADDED) ==============
+build_inputs() {
+  sep
+  echo "[3] Build Chat2UnitTest input JSONs..."
+
+  if [[ -s "$MODIFIED_METHODS_FILE" ]]; then
+    java -cp "$AST_JAR" "$CHAT2UNITTEST_INPUT_BUILDER_CLASS" \
+      "$MODIFIED_METHODS_FILE" "$PROD_ROOT" "$INPUT_MODIFIED_JSON"
+    echo "[3] OK: $INPUT_MODIFIED_JSON"
+  else
+    rm -f "$INPUT_MODIFIED_JSON" 2>/dev/null || true
+    echo "[3] No modified methods -> skip $INPUT_MODIFIED_JSON"
+  fi
+
+  if [[ -s "$ADDED_METHODS_FILE" ]]; then
+    java -cp "$AST_JAR" "$CHAT2UNITTEST_INPUT_BUILDER_CLASS" \
+      "$ADDED_METHODS_FILE" "$PROD_ROOT" "$INPUT_ADDED_JSON"
+    echo "[3] OK: $INPUT_ADDED_JSON"
+  else
+    rm -f "$INPUT_ADDED_JSON" 2>/dev/null || true
+    echo "[3] No added methods -> skip $INPUT_ADDED_JSON"
+  fi
+}
+
+# ===================== Branch helpers: Coverage lookup ========================
+tests_covering_methods() {
+  local methods_file="$1"
+  [[ -s "$methods_file" ]] || return 0
+  [[ -f "$COVERAGE_MATRIX_JSON" ]] || { echo "[coverage] ERROR: $COVERAGE_MATRIX_JSON not found"; exit 1; }
+
+  while IFS= read -r raw; do
+    m="$(sanitize_line "$raw")"
+    [[ -z "$m" ]] && continue
+    jq -r --arg m "$m" '
+      to_entries
+      | map(select(.value | index($m)))
+      | .[].key
+    ' "$COVERAGE_MATRIX_JSON"
+  done < "$methods_file" | sort -u
+}
+
+# ===================== Branch ii: DELETED =====================================
+branch_deleted() {
+  sep
+  echo "[0] Rebuild coverage-matrix by running MainTestSuite..."
+  rm -f app/coverage-matrix.json
+
+  # forza l’esecuzione della suite che genera coverage
+  ./gradlew :app:test --tests "suite.MainTestSuite" --rerun-tasks
+
+  if [[ ! -f "app/coverage-matrix.json" ]]; then
+    echo "[0] ERROR: app/coverage-matrix.json was not generated!"
+    exit 1
+  fi
+
+  echo "[0] OK: coverage-matrix generated."
+  sep
+  echo "[BRANCH ii] DELETED methods -> remove covering tests + benchmarks + update coverage"
+
+  if [[ ! -s "$DELETED_METHODS_FILE" ]]; then
+    echo "[BRANCH ii] No deleted methods. Skip."
     return 0
   fi
 
-  local -a TEST_CLASSES=()
-  for prod_fqn in "${PROD_CLASSES[@]}"; do
-    prod_fqn="$(sanitize_line "$prod_fqn")"
-    [[ -z "$prod_fqn" ]] && continue
+  # 1) Coverage lookup: methods deleted -> test methods to delete
+  tests_covering_methods "$DELETED_METHODS_FILE" > "$TESTS_TO_DELETE_FILE" || true
 
-    local test_fqn="${prod_fqn}Test"
-    echo "[coverage] Classe prod: $prod_fqn -> test: $test_fqn"
-    TEST_CLASSES+=("$test_fqn")
-  done
-
-  if ((${#TEST_CLASSES[@]} == 0)); then
-    echo "[coverage] Nessuna test class calcolata: skip."
+  echo "[BRANCH ii] Test methods to delete (from coverage-matrix):"
+  if [[ -s "$TESTS_TO_DELETE_FILE" ]]; then
+    cat "$TESTS_TO_DELETE_FILE"
+  else
+    echo "(none)"
     return 0
   fi
 
-  local CMD=( "./gradlew" ":app:test" )
-  for cls in "${TEST_CLASSES[@]}"; do
-    CMD+=( "--tests" "$cls" )
-  done
+  # 2) Remove JUnit test methods precisely (NOT whole class)
+  echo "[BRANCH ii] Pruning JUnit test methods from $TEST_ROOT ..."
+  java -cp "$AST_JAR" TestPruner "$TESTS_TO_DELETE_FILE" "$TEST_ROOT"
 
-  echo "[coverage] Comando: ${CMD[*]}"
+  # 3) Remove benchmark methods precisely (benchmark_<testMethod>) from inner class _Benchmark
+  echo "[BRANCH ii] Pruning benchmark methods from $BENCH_ROOT ..."
+  java -cp "$AST_JAR" BenchmarkPruner "$TESTS_TO_DELETE_FILE" "$BENCH_ROOT"
 
-  local MAX_ATTEMPTS=10
+  # 4) Update coverage-matrix: remove entries whose key is a deleted test method
+  echo "[BRANCH ii] Updating coverage-matrix (removing deleted test entries)..."
+
+  # Build jq del list: del(.["k1"], .["k2"], ...)
+  del_args="$(awk '
+    NF>0 { gsub(/"/, "\\\""); printf ".[%c%s%c],", 34, $0, 34 }
+  ' "$TESTS_TO_DELETE_FILE")"
+  del_args="${del_args%,}"
+
+  tmp_cov="$(mktemp)"
+  jq "del($del_args)" "$COVERAGE_MATRIX_JSON" > "$tmp_cov"
+  mv "$tmp_cov" "$COVERAGE_MATRIX_JSON"
+
+  echo "[BRANCH ii] Done."
+}
+
+# ===================== Branch i: MODIFIED =====================================
+branch_modified() {
+  sep
+  echo "[BRANCH i] MODIFIED methods -> find covering tests, prune, regenerate (retry max=$MAX_CHAT2UNITTEST_ATTEMPTS)"
+
+  if [[ ! -s "$MODIFIED_METHODS_FILE" ]]; then
+    echo "[BRANCH i] No modified methods. Skip."
+    return 0
+  fi
+
+  # 1) Lookup coverage-matrix → test da rigenerare
+  tests_covering_methods "$MODIFIED_METHODS_FILE" > "$TESTS_TO_REGENERATE_FILE" || true
+
+  echo "[BRANCH i] Tests covering modified methods:"
+  if [[ -s "$TESTS_TO_REGENERATE_FILE" ]]; then
+    cat "$TESTS_TO_REGENERATE_FILE"
+  else
+    echo "(none) -> nothing to regenerate"
+    return 0
+  fi
+
+  # 2) Input per Chat2UnitTest (debug)
+  echo "[BRANCH i] Input for Chat2UnitTest:"
+  [[ -f "$INPUT_MODIFIED_JSON" ]] && cat "$INPUT_MODIFIED_JSON" || echo "(missing input json)"
+
+  if [[ "$RUN_CHAT2UNITTEST" != "1" ]]; then
+    echo "[BRANCH i] RUN_CHAT2UNITTEST=0 -> skip regeneration."
+    return 0
+  fi
+
+  # 3) Classi test da validare (solo quelle rigenerate)
+  local test_classes_file
+  test_classes_file="$(mktemp)"
+  extract_test_classes "$TESTS_TO_REGENERATE_FILE" > "$test_classes_file"
+
+  echo "[BRANCH i] Test classes to validate:"
+  cat "$test_classes_file"
+
+  # 4) Prune vecchi test JUnit + vecchi benchmark (una volta sola prima dei tentativi)
+  echo "[BRANCH i] Pruning old JUnit test methods..."
+  java -cp "$AST_JAR" TestPruner "$TESTS_TO_REGENERATE_FILE" "$TEST_ROOT"
+
+  echo "[BRANCH i] Pruning old benchmark methods..."
+  java -cp "$AST_JAR" BenchmarkPruner "$TESTS_TO_REGENERATE_FILE" "$BENCH_ROOT"
+
+  # 5) Retry loop
   local attempt=1
-  local EXIT_CODE=0
+  while [[ "$attempt" -le "$MAX_CHAT2UNITTEST_ATTEMPTS" ]]; do
+    sep
+    echo "[BRANCH i] Attempt $attempt/$MAX_CHAT2UNITTEST_ATTEMPTS"
 
-  # con set -e, un test fallito ucciderebbe lo script: lo disabilitiamo durante i tentativi
-  set +e
-  while (( attempt <= MAX_ATTEMPTS )); do
-    echo "[coverage] Tentativo $attempt/$MAX_ATTEMPTS..."
-    "${CMD[@]}"
-    EXIT_CODE=$?
+    # (Consigliato) elimina i file delle classi test coinvolte prima di rigenerare
+    while IFS= read -r cls; do
+      cls="$(sanitize_line "$cls")"
+      [[ -z "$cls" ]] && continue
+      tf="$(fqn_to_test_path "$cls")"
+      if [[ -f "$tf" ]]; then
+        rm -f "$tf"
+        echo "[BRANCH i] Deleted old test file: $tf"
+      fi
+    done < "$test_classes_file"
 
-    if (( EXIT_CODE == 0 )); then
-      echo "[coverage] OK: test passati al tentativo $attempt."
-      break
+    # 5a) Rigenera test con Chat2UnitTest
+    echo "[BRANCH i] Running Chat2UnitTest..."
+    java -jar "$CHAT2UNITTEST_JAR" "$INPUT_MODIFIED_JSON" \
+      -host "$CHAT2UNITTEST_HOST" \
+      -mdl "$CHAT2UNITTEST_MODEL" \
+      -tmp "$CHAT2UNITTEST_TEMP"
+
+    # Guard: ensure expected regenerated test classes exist before compiling whole test suite
+    local missing=0
+    while IFS= read -r cls; do
+       cls="$(sanitize_line "$cls")"
+       [[ -z "$cls" ]] && continue
+
+       tf="$(fqn_to_test_path "$cls")"
+       if [[ ! -s "$tf" ]]; then
+         echo "[BRANCH i] Missing/empty regenerated test file: $tf"
+         missing=1
+         continue
+       fi
+
+       simple="${cls##*.}"  # ContoBancarioTest
+       if ! grep -qE "public[[:space:]]+class[[:space:]]+$simple\\b" "$tf"; then
+         echo "[BRANCH i] Regenerated file does not declare expected public class $simple: $tf"
+         missing=1
+       fi
+    done < "$test_classes_file"
+
+    if [[ "$missing" -eq 1 ]]; then
+       echo "[BRANCH i] Regeneration incomplete -> skip gradle for this attempt."
+       attempt=$((attempt+1))
+       continue
     fi
 
-    echo "[coverage] KO (exit=$EXIT_CODE)."
+    # 5b) Valida SOLO le classi rigenerate
+    echo "[BRANCH i] Validating regenerated tests (only affected classes)..."
+    mapfile -t gradle_args < <(build_gradle_tests_args "$test_classes_file")
 
-    # Placeholder: qui (in futuro) richiamerai Chat2UnitTest per fixare/rigenerare e poi ritenti.
-    echo "[coverage] [DRY-RUN] Qui rigenererei/fixerei i test con Chat2UnitTest e riscriverei i file."
-    attempt=$((attempt + 1))
+    if ./gradlew :app:test --rerun-tasks "${gradle_args[@]}"; then
+      echo "[BRANCH i] Attempt $attempt succeeded. Regenerated tests are valid."
+      rm -f "$test_classes_file" 2>/dev/null || true
+      return 0
+    fi
+
+    echo "[BRANCH i]  Attempt $attempt failed."
+    attempt=$((attempt+1))
   done
-  set -e
 
-  if (( EXIT_CODE != 0 )); then
-    echo "[coverage] ERRORE: dopo $MAX_ATTEMPTS tentativi i test falliscono ancora. Pipeline KO."
-    exit $EXIT_CODE
+  sep
+  echo "[BRANCH i]  FAILED: Chat2UnitTest did not produce passing tests after $MAX_CHAT2UNITTEST_ATTEMPTS attempts."
+  echo "[BRANCH i] Pipeline must fail and CI should NOT commit generated files."
+
+  # In CI: ripulisci le modifiche (così la repo resta sul commit originale)
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "[BRANCH i] Restoring working tree changes (tests + benches)..."
+    git restore "$TEST_ROOT" "$BENCH_ROOT" 2>/dev/null || true
   fi
 
-  echo "[coverage] Coverage aggiornata (esecuzione test mirati completata)."
+  rm -f "$test_classes_file" 2>/dev/null || true
+  exit 1
 }
 
-# ==============================================================================
-# STEP A: Git diff -> classi modificate (FQN)
-# ==============================================================================
-sep
-echo "[A] Calcolo classi modificate via git diff..."
+# ===================== Branch iii: ADDED ======================================
+branch_added() {
+  sep
+  echo "[BRANCH iii] ADDED methods -> generate tests, update coverage, convert to bench"
 
-current_commit="$(git log --format="%H" -n 1)"
-previous_commit="$(git log --format="%H" -n 2 | tail -n 1)"
-
-git_diff="$(git diff -U0 --minimal "$previous_commit" "$current_commit")"
-
-modified_classes=()
-while IFS= read -r line; do
-  if [[ $line =~ ^\+++\ .*\/main\/java\/(.*\/)?([^\/]+)\.java$ ]]; then
-    packages="${BASH_REMATCH[1]}"
-    file_name="${BASH_REMATCH[2]}"
-
-    if [[ -n "$packages" ]]; then
-      packages="${packages%/}"
-      packages="${packages}."
-    fi
-
-    class_name="${packages//\//.}${file_name%.java}"
-    modified_classes+=("$class_name")
+  if [[ ! -s "$ADDED_METHODS_FILE" ]]; then
+    echo "[BRANCH iii] No added methods. Skip."
+    return 0
   fi
-done <<< "$git_diff"
 
-if ((${#modified_classes[@]} == 0)); then
-  echo "[A] Nessuna classe di produzione modificata trovata. Stop."
-  exit 0
-fi
+  echo "[BRANCH iii] Input for Chat2UnitTest:"
+  [[ -f "$INPUT_ADDED_JSON" ]] && cat "$INPUT_ADDED_JSON" || echo "(missing input json)"
 
-echo "[A] Classi modificate:"
-printf '%s\n' "${modified_classes[@]}"
-sep
-
-tmp_classes_file="modified_classes.txt"
-printf "%s\n" "${modified_classes[@]}" > "$tmp_classes_file"
-
-# ==============================================================================
-# STEP B: AST -> produce files methods (oggi almeno modified; domani 3 file)
-# ==============================================================================
-echo "[B] Eseguo AST..."
-if [[ ! -f "$AST_JAR" ]]; then
-  echo "[B] ERRORE: $AST_JAR non trovato. Devi buildare il jar (task shadow/fat jar)."
-  exit 1
-fi
-
-java -jar "$AST_JAR" "$tmp_classes_file"
-rm -f "$tmp_classes_file"
-
-# “Compatibilità”: se oggi AST genera solo modified_methods.txt, non moriamo
-ensure_file_or_empty "$MODIFIED_METHODS_FILE"
-ensure_file_or_empty "$ADDED_METHODS_FILE"
-ensure_file_or_empty "$DELETED_METHODS_FILE"
-
-echo "[B] Output AST:"
-echo " - $MODIFIED_METHODS_FILE (righe: $(wc -l < "$MODIFIED_METHODS_FILE" | tr -d ' '))"
-echo " - $ADDED_METHODS_FILE    (righe: $(wc -l < "$ADDED_METHODS_FILE" | tr -d ' '))"
-echo " - $DELETED_METHODS_FILE  (righe: $(wc -l < "$DELETED_METHODS_FILE" | tr -d ' '))"
-sep
-
-# ==============================================================================
-# STEP C: Genera input.json per Chat2UnitTest (MODIFIED / ADDED separati)
-# ==============================================================================
-echo "[C] Genero input.json per Chat2UnitTest con $CHAT2UNITTEST_INPUT_BUILDER_CLASS ..."
-
-if [[ -s "$MODIFIED_METHODS_FILE" ]]; then
-  echo "[C] -> $INPUT_MODIFIED_JSON da $MODIFIED_METHODS_FILE"
-  java -cp "$AST_JAR" "$CHAT2UNITTEST_INPUT_BUILDER_CLASS" \
-    "$MODIFIED_METHODS_FILE" "$PROD_ROOT" "$INPUT_MODIFIED_JSON"
-else
-  echo "[C] -> modified vuoto: skip $INPUT_MODIFIED_JSON"
-  rm -f "$INPUT_MODIFIED_JSON" 2>/dev/null || true
-fi
-
-if [[ -s "$ADDED_METHODS_FILE" ]]; then
-  echo "[C] -> $INPUT_ADDED_JSON da $ADDED_METHODS_FILE"
-  java -cp "$AST_JAR" "$CHAT2UNITTEST_INPUT_BUILDER_CLASS" \
-    "$ADDED_METHODS_FILE" "$PROD_ROOT" "$INPUT_ADDED_JSON"
-else
-  echo "[C] -> added vuoto: skip $INPUT_ADDED_JSON"
-  rm -f "$INPUT_ADDED_JSON" 2>/dev/null || true
-fi
-
-sep
-
-# ==============================================================================
-# STEP D: (DRY-RUN) Chat2UnitTest
-# ==============================================================================
-echo "[D] Chat2UnitTest (DRY-RUN=${DRY_RUN})"
-
-if [[ -f "$INPUT_MODIFIED_JSON" ]]; then
-  echo "[D] MODIFIED: userei $INPUT_MODIFIED_JSON per rigenerare test + eliminare vecchi"
-  if [[ "$DRY_RUN" == "1" ]]; then
-    echo "[D] [DRY-RUN] Nessuna rigenerazione reale eseguita."
+  if [[ "$RUN_CHAT2UNITTEST" == "1" ]]; then
+    echo "[BRANCH iii] TODO: call Chat2UnitTest for ADDED using $INPUT_ADDED_JSON"
+    echo "[BRANCH iii] TODO: run targeted tests to update coverage-matrix"
   else
-    echo "[D] TODO: chiamata reale a Chat2UnitTest per MODIFIED"
-    # qui metterai la tua chiamata vera
+    echo "[BRANCH iii] RUN_CHAT2UNITTEST=0 -> skip (structure ready)."
   fi
-fi
+}
 
-if [[ -f "$INPUT_ADDED_JSON" ]]; then
-  echo "[D] ADDED: userei $INPUT_ADDED_JSON per generare nuovi test"
-  if [[ "$DRY_RUN" == "1" ]]; then
-    echo "[D] [DRY-RUN] Nessuna generazione reale eseguita."
-  else
-    echo "[D] TODO: chiamata reale a Chat2UnitTest per ADDED"
-  fi
-fi
+# ===================== MAIN ===================================================
+extract_modified_classes
+run_ast
+build_inputs
 
-sep
-
-# ==============================================================================
-# STEP E: Coverage-Matrix (oggi: placeholder; domani: aggiorni dopo ADDED/MODIFIED)
-# ==============================================================================
-echo "[E] Coverage-matrix: $COVERAGE_MATRIX_JSON"
-# Anche in DRY_RUN puoi decidere di eseguire i test (serve proprio per aggiornare coverage).
-# Quindi NON lo blocco su DRY_RUN: lo blocchiamo solo se vuoi tu.
-
-update_coverage_for_classes_with_retry "${modified_classes[@]}"
+# 3-way branches (final structure)
+#branch_deleted
+branch_modified
+#branch_added
 
 sep
-
-# ==============================================================================
-# STEP F: Ju2Jmh + Benchmark (oggi: DRY-RUN)
-# ==============================================================================
-echo "[F] Ju2Jmh (DRY-RUN=${DRY_RUN})"
-if [[ "$DRY_RUN" == "1" ]]; then
-  echo "[F] [DRY-RUN] Skipping conversione test->benchmark e run JMH."
-else
-  echo "[F] TODO: qui inserirai conversione ju2jmh e run benchmark selettivi"
-fi
-sep
-
-# ==============================================================================
-# STEP G: Deleted methods (oggi: DRY-RUN)
-# ==============================================================================
-echo "[G] Deleted methods (DRY-RUN=${DRY_RUN})"
-if [[ -s "$DELETED_METHODS_FILE" ]]; then
-  echo "[G] Metodi eliminati trovati:"
-  cat "$DELETED_METHODS_FILE"
-  echo "[G] TODO: per ciascun metodo eliminato -> coverage-matrix -> elimina test"
-else
-  echo "[G] Nessun metodo eliminato."
-fi
-sep
-
-# ==============================================================================
-# STEP H: Commit & Push (controllati da DRY_RUN e PUSH_ENABLED)
-# ==============================================================================
-echo "[H] Git commit/push (DRY_RUN=${DRY_RUN}, PUSH_ENABLED=${PUSH_ENABLED})"
-
-git add "$TEST_ROOT" || true
-git add "$BENCH_ROOT" || true
-git add "$COVERAGE_MATRIX_JSON" || true
-
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "[H] Ci sono modifiche da committare."
-  if [[ "$DRY_RUN" == "1" ]]; then
-    echo "[H] [DRY-RUN] Non faccio commit/push."
-  else
-    git commit -m "Update tests/benchmarks/coverage for modified classes" || true
-
-    if [[ "$PUSH_ENABLED" == "1" ]]; then
-      if [[ -z "${ACTIONS_TOKEN:-}" ]]; then
-        echo "[H] ERRORE: ACTIONS_TOKEN non settato, non posso pushare."
-        exit 1
-      fi
-      git remote set-url origin "$REMOTE_WITH_TOKEN"
-      git push origin main
-      echo "[H] Push completato."
-    else
-      echo "[H] Push disabilitato (PUSH_ENABLED=0)."
-    fi
-  fi
-else
-  echo "[H] Nessuna modifica rilevata."
-fi
-
-sep
-echo "DONE"
+echo "PIPELINE STRUCTURE COMPLETED."

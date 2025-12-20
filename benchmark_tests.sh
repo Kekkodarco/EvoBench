@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Configure git
-git config --global user.email "atrovato@unisa.it"
-git config --global user.name "AntonioTrovato"
+git config --global user.email "f.darco6@studenti.unisa.it"
+git config --global user.name "Kekkodarco"
 
 #TODO: JU2JMH SVUOTA LE CLASSI DI BENCHMARK NON
 #TODO: INTERESSATE DAL COMMIT (SE UNA CLASSE

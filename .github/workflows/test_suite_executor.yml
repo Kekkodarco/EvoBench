@@ -3,19 +3,24 @@ name: Scheduled Test Run
 on:
   push:
     branches:
-      - main  # Puoi modificare il nome del branch se necessario
+      - main
   schedule:
-    - cron: '0 0 */5 * *'  # ogni 5 giorni
+    - cron: '0 0 */5 * *'  # giorni del mese 1,6,11,16,21,26,31 (00:00 UTC)
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: coverage-matrix-update
+  cancel-in-progress: true
 
 jobs:
   run-tests:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repositoryls
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -26,25 +31,27 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
 
       - name: Set execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run Gradle clean
-        run: ./gradlew clean
-
-      - name: Run Gradle tests
-        run: ./gradlew :app:test
+      - name: Run Gradle clean + tests
+        run: ./gradlew clean :app:test --rerun-tasks
 
       - name: Configure Git
+        if: github.event_name == 'schedule'
         run: |
           git config --local user.name "github-actions"
           git config --local user.email "github-actions@github.com"
 
       - name: Commit coverage matrix changes
+        if: github.event_name == 'schedule'
         run: |
-          git add app/coverage-matrix.json  # Updated path to the coverage matrix
-          git commit -m "Update coverage matrix" || echo "No changes to commit"
+          git add app/coverage-matrix.json
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Update coverage matrix [skip ci]"
 
       - name: Push changes
+        if: github.event_name == 'schedule'
         run: git push origin main

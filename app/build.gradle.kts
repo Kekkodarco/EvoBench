@@ -1,5 +1,6 @@
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension.Output
+import org.gradle.api.file.DuplicatesStrategy
 
 plugins {
     java
@@ -28,9 +29,16 @@ dependencies {
 tasks.test {
     useJUnit()
 
-    // NON eseguirli come test (ma verranno comunque compilati)
+    // NON eseguirli come test
     exclude("**/JacocoCoverageListener*")
     exclude("**/JacocoCoverageRunListener*")
+
+    // Mostra System.out/System.err dei test (serve per vedere i tuoi [DEBUG])
+    testLogging {
+        showStandardStreams = true
+        events("passed", "failed", "skipped", "standardOut", "standardError")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
 
     extensions.configure(JacocoTaskExtension::class.java) {
         output = Output.TCP_SERVER
@@ -54,6 +62,12 @@ tasks.jacocoTestReport {
 }
 
 tasks.register<Jar>("fatJar") {
+    archiveClassifier.set("all")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    manifest {
+        attributes["Main-Class"] = "ASTGenerator"
+    }
     group = "build"
     archiveClassifier.set("all")
 

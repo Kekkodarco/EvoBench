@@ -36,10 +36,7 @@ public class Utente {
         return contoBancario;
     }
 
-    public void setName(String name) {
-        this.name = name;
-        System.out.println("modifica");
-    }
+    public void setName(String name) { this.name = name;}
 
     public void setSurname(String surname) {
         this.surname = surname;
