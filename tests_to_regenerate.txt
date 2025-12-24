@@ -5,3 +5,5 @@ banca.ContoBancarioTest.testPrelievo
 banca.ContoBancarioTest.testPrelievoNegativo
 banca.ContoBancarioTest.testPrelievoPositivo
 banca.ContoBancarioTest.testPrelievoZero
+utente.UtenteTest.testGetName
+utente.UtenteTest.testSetName

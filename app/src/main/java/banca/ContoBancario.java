@@ -26,13 +26,10 @@ public class ContoBancario {
 
 
 
-    public void versamento(int quota) {
-        this.saldo += quota;
-    }
+    public void versamento(int quota) {this.saldo += quota;}
 
 
     public int prelievo(int quota) {
-        System.out.println("Prelievo: " + quota);
         if (this.saldo < quota)
             return 0;
         else

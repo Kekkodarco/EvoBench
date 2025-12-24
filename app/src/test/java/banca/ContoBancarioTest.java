@@ -25,6 +25,6 @@ public class ContoBancarioTest {
         // Test case: prelievo from a negative balance that is sufficient to cover the quota
         ContoBancario conto = new ContoBancario("1234", -5);
         int quota = 5;
-        Assert.assertEquals(1, conto.prelievo(quota));
+        Assert.assertEquals(0, conto.prelievo(quota));
     }
 }

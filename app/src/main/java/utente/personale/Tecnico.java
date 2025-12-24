@@ -25,6 +25,7 @@ public class Tecnico {
     }
 
     public void setName(String name) {
+        System.out.println("ciaoff");
         this.name = name;
     }
 

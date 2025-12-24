@@ -6,7 +6,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mockito;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
@@ -21,30 +20,23 @@ public class UtenteTest {
     }
 
     @Test
-    public void testGetName() {
-        assertEquals("John", utente.getName());
-    }
-
-    @Test
     public void testGetSurname() {
         assertEquals("Doe", utente.getSurname());
     }
 
     @Test
-    public void testGetTelephone() {assertEquals("123", utente.getTelephone());}
+    public void testGetTelephone() {
+        assertEquals("123", utente.getTelephone());
+    }
 
     @Test
-    public void testGetAddress() {assertEquals("via mazzini", utente.getAddress(1));}
+    public void testGetAddress() {
+        assertEquals("via mazzini", utente.getAddress(1));
+    }
 
     @Test
     public void testGetContoBancario() {
         assertNotNull(utente.getContoBancario());
-    }
-
-    @Test
-    public void testSetName() {
-        utente.setName("Smith");
-        assertEquals("Smith", utente.getName());
     }
 
     @Test
@@ -59,4 +51,10 @@ public class UtenteTest {
         utente.setContoBancario(nuovoConto);
         assertEquals(nuovoConto, utente.getContoBancario());
     }
+
+
+
+
+
+
 }
