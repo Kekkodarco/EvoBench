@@ -1,4 +1,2 @@
 banca.ContoBancario
-utente.Utente
 utente.personale.Amministratore
-utente.personale.Tecnico

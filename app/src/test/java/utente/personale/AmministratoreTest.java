@@ -2,6 +2,7 @@ package utente.personale;
 
 import static org.junit.Assert.*;
 
+
 import listener.JacocoCoverageListener;
 import org.junit.Before;
 import org.junit.Rule;
@@ -44,6 +45,67 @@ assertEquals("Foe", amministratore.getSurname());
     }
 
     @Test
+public void testSetDepartment_case1() {
+        // Arrange
+String name = "John";
+String surname = "Doe";
+String department = "IT";
+Amministratore amministratore = new Amministratore(name, surname, department);
+
+        // Act
+amministratore.setDepartment(department);
+
+        // Assert
+assertEquals("IT", amministratore.getDepartment());
+    }
+
+
+
+
+
+
+    @Test
+public void testSetDepartment_case2() {
+        // Setup
+String name = "John";
+String surname = "Doe";
+String department = "IT";
+Amministratore amministratore = new Amministratore(name, surname, department);
+
+        // Test
+amministratore.setDepartment("Sales");
+
+        // Assertions
+assertEquals("Sales", amministratore.getDepartment());
+    }
+    @Test
+public void testSetDepartment_case3() {
+        // Setup
+String name = "John";
+String surname = "Doe";
+String department = "IT";
+Amministratore amministratore = new Amministratore(name, surname, department);
+
+        // Test
+amministratore.setDepartment(null);
+
+        // Assertions
+assertNull(amministratore.getDepartment());
+    }
+    @Test
+public void testSetDepartment_case4() {
+        // Setup
+String name = "John";
+String surname = "Doe";
+String department = "IT";
+Amministratore amministratore = new Amministratore(name, surname, department);
+
+        // Test
+amministratore.setDepartment("");
+
+        // Assertions
+assertEquals("", amministratore.getDepartment());
+    }
 
 
 

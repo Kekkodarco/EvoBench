@@ -1,13 +1,10 @@
 package utente.personale;
 
-import static org.junit.Assert.*;
 import org.junit.Test;
+import static org.junit.Assert.*;
 
 public class AmministratoreTest {
-    /*
-     * Tests for setDepartment method
-     */
-
+    /* Tests for setDepartment */
     @Test
     public void testSetDepartment() {
         // Setup
@@ -16,22 +13,40 @@ public class AmministratoreTest {
         String department = "IT";
         Amministratore amministratore = new Amministratore(name, surname, department);
 
-        // Test 1: setDepartment with valid input
-        String newDepartment = "Marketing";
-        assertEquals("Expected department to be updated", newDepartment, amministratore.setDepartment(newDepartment));
-        assertEquals("Expected name to remain unchanged", name, amministratore.getName());
-        assertEquals("Expected surname to remain unchanged", surname, amministratore.getSurname());
+        // Test
+        amministratore.setDepartment("Sales");
 
-        // Test 2: setDepartment with null input
-        newDepartment = null;
-        assertNull("Expected department to be updated", amministratore.setDepartment(newDepartment));
-        assertEquals("Expected name to remain unchanged", name, amministratore.getName());
-        assertEquals("Expected surname to remain unchanged", surname, amministratore.getSurname());
+        // Assertions
+        assertEquals("Sales", amministratore.getDepartment());
+    }
 
-        // Test 3: setDepartment with empty input
-        newDepartment = "";
-        assertNull("Expected department to be updated", amministratore.setDepartment(newDepartment));
-        assertEquals("Expected name to remain unchanged", name, amministratore.getName());
-        assertEquals("Expected surname to remain unchanged", surname, amministratore.getSurname());
+    @Test
+    public void testSetDepartment_Null() {
+        // Setup
+        String name = "John";
+        String surname = "Doe";
+        String department = "IT";
+        Amministratore amministratore = new Amministratore(name, surname, department);
+
+        // Test
+        amministratore.setDepartment(null);
+
+        // Assertions
+        assertNull(amministratore.getDepartment());
+    }
+
+    @Test
+    public void testSetDepartment_Empty() {
+        // Setup
+        String name = "John";
+        String surname = "Doe";
+        String department = "IT";
+        Amministratore amministratore = new Amministratore(name, surname, department);
+
+        // Test
+        amministratore.setDepartment("");
+
+        // Assertions
+        assertEquals("", amministratore.getDepartment());
     }
 }

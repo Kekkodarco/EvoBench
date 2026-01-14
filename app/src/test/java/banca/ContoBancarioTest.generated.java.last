@@ -6,30 +6,20 @@ import org.junit.Test;
 
 public class ContoBancarioTest {
     @Test
-    public void testPrelievo_insufficientBalance() {
-        // Given a new account with initial balance 0 and a quota of 100
-        ContoBancario account = new ContoBancario("default", 0);
-        int quota = 100;
-
-        // When prelievo is called with a quota greater than the current balance
-        int result = account.prelievo(quota);
-
-        // Then the method returns 0 and the balance remains unchanged (0)
-        assertEquals(0, result);
-        assertEquals(0, account.getSaldo());
+    public void testPrelievo() {
+        // Test prelievo with sufficient balance
+        ContoBancario c = new ContoBancario("1234", 100);
+        int quota = 50;
+        assertEquals(1, c.prelievo(quota));
+        assertEquals(50, c.getSaldo());
     }
 
     @Test
-    public void testPrelievo_sufficientBalance() {
-        // Given a new account with initial balance 100 and a quota of 50
-        ContoBancario account = new ContoBancario("default", 100);
-        int quota = 50;
-
-        // When prelievo is called with a quota less than the current balance
-        int result = account.prelievo(quota);
-
-        // Then the method returns 1 and the balance decreases by the quota amount (50)
-        assertEquals(1, result);
-        assertEquals(50, account.getSaldo());
+    public void testPrelievoWithInsufficientBalance() {
+        // Test prelievo with insufficient balance
+        ContoBancario c = new ContoBancario("1234", 50);
+        int quota = 100;
+        assertEquals(0, c.prelievo(quota));
+        assertEquals(50, c.getSaldo());
     }
 }
