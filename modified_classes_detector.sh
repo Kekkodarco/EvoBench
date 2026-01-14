@@ -15,7 +15,7 @@ CHAT2UNITTEST_HOST="https://uncourtierlike-louvered-katelin.ngrok-free.dev/v1/ch
 CHAT2UNITTEST_MODEL="codellama-7b-instruct-hf"
 CHAT2UNITTEST_TEMP="0.4"
 #numero massimo tentativi generazione test
-MAX_CHAT2UNITTEST_ATTEMPTS="${MAX_CHAT2UNITTEST_ATTEMPTS:-10}"
+MAX_CHAT2UNITTEST_ATTEMPTS="${MAX_CHAT2UNITTEST_ATTEMPTS:-3}"
 
 MODIFIED_METHODS_FILE="modified_methods.txt"
 ADDED_METHODS_FILE="added_methods.txt"
@@ -142,11 +142,95 @@ generate_jmh_for_testclass() {
   return 0
 }
 
+ensure_import() {
+  local file="$1"
+  local import_fqn="$2"   # es: org.junit.Test
+  local import_line="import ${import_fqn};"
+
+  grep -qE "^[[:space:]]*import[[:space:]]+${import_fqn//./\\.}[[:space:]]*;" "$file" && return 0
+
+  local tmp
+  tmp="$(mktemp)"
+
+  awk -v imp="$import_line" '
+    BEGIN{inserted=0; lastImport=0; pkgLine=0}
+
+    {
+      lines[NR]=$0
+      if($0 ~ /^[[:space:]]*package[[:space:]]+/) pkgLine=NR
+      if($0 ~ /^[[:space:]]*import[[:space:]]+/)  lastImport=NR
+    }
+
+    END{
+      for(i=1;i<=NR;i++){
+        print lines[i]
+
+        if(inserted==0){
+          # caso: esistono import -> dopo l ultimo import
+          if(lastImport>0 && i==lastImport){
+            print imp
+            inserted=1
+          }
+          # caso: no import ma package -> dopo package
+          else if(lastImport==0 && pkgLine>0 && i==pkgLine){
+            print imp
+            inserted=1
+          }
+        }
+      }
+
+      # caso: no package e no import -> in testa (ma qui siamo in END, quindi non possiamo)
+      # lo gestiamo fuori, con inserted==0
+    }
+  ' "$file" > "$tmp"
+
+  if ! grep -qE "^[[:space:]]*import[[:space:]]+${import_fqn//./\\.}[[:space:]]*;" "$tmp"; then
+    # significa che non c erano package/import -> metti in testa
+    awk -v imp="$import_line" 'BEGIN{print imp; print ""} {print}' "$file" > "$tmp"
+  fi
+
+  mv "$tmp" "$file"
+}
+
+ensure_static_import() {
+  local file="$1"
+  local what="$2"   # es: org.junit.Assert.*
+
+  # 1) se già c'è, non fare nulla (ma prima dedup dopo)
+  if grep -qE "^[[:space:]]*import[[:space:]]+static[[:space:]]+${what//./\\.}[[:space:]]*;" "$file"; then
+    :
+  else
+    # inserisci dopo package o in testa
+    if grep -qE '^[[:space:]]*package[[:space:]]+' "$file"; then
+      awk -v imp="import static ${what};" '
+        BEGIN{done=0}
+        {print}
+        done==0 && $0 ~ /^[[:space:]]*package[[:space:]]+/ { print ""; print imp; done=1 }
+      ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+    else
+      awk -v imp="import static ${what};" 'BEGIN{print imp} {print}' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+    fi
+  fi
+
+  # 2) rimuovi import static specifici (assertEquals, assertTrue, ecc.) se hai Assert.*
+  if [[ "$what" == "org.junit.Assert.*" ]]; then
+    grep -vE '^[[:space:]]*import[[:space:]]+static[[:space:]]+org\.junit\.Assert\.[A-Za-z0-9_]+[[:space:]]*;' \
+      "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+  fi
+
+  # 3) dedup righe import static identiche
+  awk '
+    /^[[:space:]]*import[[:space:]]+static[[:space:]]+/{
+      if(seen[$0]++) next
+    }
+    {print}
+  ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+}
+
 merge_generated_tests() {
   local test_file="$1"
-  local tests_to_regen_file="$2"
   local gen_file="${test_file%.java}.generated.java"
-  local bak_file="${test_file}.bak"
+  local bak_file="${test_file}.pristine"
 
   # 0) serve il generated
   if [[ ! -f "$gen_file" ]]; then
@@ -154,10 +238,10 @@ merge_generated_tests() {
     return 1
   fi
 
-  # 1) ripristina target se manca ma c'è backup
+  # 1) ripristina target se manca ma c'è backup (NON consumare il backup)
   if [[ ! -f "$test_file" && -f "$bak_file" ]]; then
-    mv "$bak_file" "$test_file"
-    echo "[MERGE] Restored backup as target: $test_file"
+    cp -f "$bak_file" "$test_file"
+    echo "[MERGE] Restored backup as target (kept .pristine): $test_file"
   fi
 
   # 2) se target non esiste, crea scheletro minimo
@@ -178,59 +262,526 @@ merge_generated_tests() {
   tmp_methods="$(mktemp)"
   tmp_names="$(mktemp)"
 
-  # 3) Estrai metodi di test dal generated (robusto con perl)
-  perl -0777 -ne '
-    while (m/^[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test\b[^\n]*\n
-             (?:^[ \t]*@.*\n)*            # eventuali altre annotation
-             ^[ \t]*public[ \t]+void[ \t]+[A-Za-z0-9_]+[ \t]*\([^)]*\)[ \t]*\{
-             .*?
-             ^[ \t]*\}
-          /gmsx) {
-      print "$&\n\n";
-    }
-  ' "$gen_file" > "$tmp_methods"
+  local tmp_fields tmp_before
+  tmp_fields="$(mktemp)"
+  tmp_before="$(mktemp)"
 
-  # ===== FIX A: dedup dei metodi di test nel generated per NOME =====
-  # Se Chat2UnitTest genera due blocchi @Test con lo stesso nome metodo, ne teniamo uno solo.
-  perl -0777 -i -pe '
-    my %seen;
-    my @blocks = split(/\n\s*\n/, $_);
-    my @out;
-    for my $b (@blocks) {
-      if ($b =~ /public\s+void\s+(\w+)\s*\(/) {
-        my $n = $1;
-        next if $seen{$n}++;
+    # =========================
+    # NORMALIZE generated file (Windows CRLF -> LF) -> gen_norm
+    # =========================
+    local gen_norm
+    gen_norm="$(mktemp)"
+    perl -pe 's/\r$//mg' "$gen_file" > "$gen_norm"
+
+    # =========================
+    # Cleanup header rumorosi LLM ("EXTRA TEXT FROM LLM") sul NORMALIZZATO
+    # =========================
+    if grep -q "EXTRA TEXT FROM LLM" "$gen_norm"; then
+      local tmp_clean
+      tmp_clean="$(mktemp)"
+      awk '
+        BEGIN{skip=0}
+        /EXTRA TEXT FROM LLM/{skip=1}
+        (skip==1 && ($0 ~ /^import[[:space:]]+org\.junit\.Test/ || $0 ~ /^[[:space:]]*public[[:space:]]+class/)){skip=0}
+        { if(skip==0) print }
+      ' "$gen_norm" > "$tmp_clean"
+      mv "$tmp_clean" "$gen_norm"
+    fi
+
+    # =========================
+    # JUNIT5 -> JUNIT4 normalize (generale)
+    # =========================
+    perl -0777 -i -pe '
+      s/\bimport\s+org\.junit\.jupiter\.api\.Test\s*;\s*/import org.junit.Test;\n/sg;
+      s/\bimport\s+org\.junit\.jupiter\.api\.BeforeEach\s*;\s*/import org.junit.Before;\n/sg;
+      s/^\s*@BeforeEach\b/@Before/mg;
+      # se ci sono static Assertions di jupiter, lasciali o rimuovili (JUnit4 userà org.junit.Assert.*)
+      s/\bimport\s+static\s+org\.junit\.jupiter\.api\.Assertions\.\*;\s*\n//sg;
+      s/^\s*\@org\.junit\.jupiter\.api\.Test\b/@Test/mg;
+      s/^\s*\@org\.junit\.jupiter\.api\.BeforeEach\b/@Before/mg;
+    ' "$gen_norm"
+
+    # =========================
+    # 3) Extract @Test method blocks from gen_norm (brace-balanced)
+    # =========================
+    awk '
+      BEGIN{ seenTest=0; inMeth=0; started=0; brace=0; buf="" }
+
+      /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test([[:space:]]*|\(|$)/{
+        if(seenTest==1){ seenTest=0; inMeth=0; started=0; brace=0; buf="" }
+        seenTest=1
+        buf=$0 "\n"
+        next
       }
+
+      {
+        if(seenTest==1){
+          buf = buf $0 "\n"
+
+          if(inMeth==0 && $0 ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/){
+            inMeth=1
+          }
+
+          if(inMeth==1){
+            if($0 ~ /\{/) started=1
+            if(started==1){
+              line = $0
+              o = gsub(/\{/, "{", line)
+              c = gsub(/\}/, "}", line)
+              brace += o
+              brace -= c
+              if(brace==0){
+                print buf
+                print "/*__TEST_BLOCK__*/"
+                print ""
+                seenTest=0; inMeth=0; started=0; brace=0; buf=""
+              }
+            }
+          }
+          next
+        }
+      }
+    ' "$gen_norm" > "$tmp_methods"
+
+    # =========================
+    # Normalize "Assert.assertX(...)" -> "assertX(...)" in generated tests
+    # (così basta "import static org.junit.Assert.*;")
+    # =========================
+    perl -pi -e 's/\b(?:org\.junit\.)?Assert\.(assert[A-Za-z0-9_]*)\s*\(/$1(/g' "$tmp_methods"
+
+    # =========================
+    # Extract class fields (private/protected/public ... ;) from generated
+    # =========================
+    awk '
+      BEGIN{inClass=0; brace=0}
+      /^[[:space:]]*(public[[:space:]]+)?class[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\{/ {inClass=1}
+      {
+        if(inClass){
+          line=$0
+          brace += gsub(/\{/,"{",line)
+          brace -= gsub(/\}/,"}",line)
+          # prendi dichiarazioni di campo semplici: accesso + tipo + nome + ;
+          if($0 ~ /^[[:space:]]*(public|protected|private)[[:space:]]+[A-Za-z0-9_<>\[\]]+[[:space:]]+[A-Za-z0-9_]+[[:space:]]*;/){
+            print $0
+          }
+          if(brace==0 && inClass==1){inClass=0}
+        }
+      }
+    ' "$gen_norm" | sed 's/\r$//' > "$tmp_fields"
+
+    # =========================
+    # Extract @Before blocks (brace-balanced) from gen_norm
+    # =========================
+    awk '
+      BEGIN{ seen=0; inMeth=0; started=0; brace=0; buf="" }
+
+      /^[[:space:]]*@Before([[:space:]]*|\(|$)/{
+        seen=1
+        buf=$0 "\n"
+        next
+      }
+
+      {
+        if(seen==1){
+          buf = buf $0 "\n"
+
+          if(inMeth==0 && $0 ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/){
+            inMeth=1
+          }
+
+          if(inMeth==1){
+            if($0 ~ /\{/) started=1
+            if(started==1){
+              line=$0
+              o=gsub(/\{/,"{",line)
+              c=gsub(/\}/,"}",line)
+              brace += o
+              brace -= c
+              if(brace==0){
+                print buf
+                print ""
+                seen=0; inMeth=0; started=0; brace=0; buf=""
+              }
+            }
+          }
+          next
+        }
+      }
+    ' "$gen_norm" | sed 's/\r$//' > "$tmp_before"
+
+    echo "[MERGE][DEBUG] tmp_methods RIGHT AFTER EXTRACT (first 80 lines):"
+    nl -ba "$tmp_methods" | sed -n '1,80p' || true
+    echo "[MERGE][DEBUG] tmp_methods method names RIGHT AFTER EXTRACT:"
+    perl -ne 'print "$.:\t$1\n" if(/(?:public\s+)?void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" || true
+
+    # =========================
+    # SANITY: scarta blocchi non validi (graffe sbilanciate / senza signature)
+    # =========================
+    perl -0777 -i -pe '
+      my @blocks = split(/\n\s*\/\*__TEST_BLOCK__\*\/\s*\n/, $_);
+      my @out;
+      for my $b (@blocks){
+        next if $b !~ /(?:public|protected|private)?\s*(?:static\s+)?void\s+\w+\s*\(/;
+        my $opens = () = ($b =~ /\{/g);
+        my $closes = () = ($b =~ /\}/g);
+        next if $opens == 0;
+        next if $opens != $closes;
+        push @out, $b;
+      }
+      $_ = join("\n/*__TEST_BLOCK__*/\n", @out) . "\n";
+    ' "$tmp_methods"
+
+    echo "[MERGE][DEBUG] tmp_methods AFTER SANITY size: $(wc -c < "$tmp_methods") bytes"
+    echo "[MERGE][DEBUG] tmp_methods AFTER FILTER size: $(wc -c < "$tmp_methods") bytes"
+
+    # (opzionale) rimuovi blocchi con package evidentemente errati generati dall’LLM
+    grep -vE 'it\.unibo\.oop\.|it\.utente\.' "$tmp_methods" > "${tmp_methods}.f" \
+      && mv "${tmp_methods}.f" "$tmp_methods"
+
+    # =========================
+    # DEBUG: mostra cosa c’è dentro il generated normalizzato e cosa ho estratto
+    # =========================
+    echo "[MERGE][DEBUG] extracted methods signatures:"
+    grep -nE '^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+' "$gen_norm" | head -n 50
+
+    if [[ ! -s "$tmp_methods" ]]; then
+      echo "[MERGE][DEBUG] extractor produced 0 @Test method blocks."
+      echo "[MERGE][DEBUG] first 120 lines of normalized generated (line-numbered):"
+      nl -ba "$gen_norm" | sed -n '1,120p' || true
+      echo "[MERGE][DEBUG] @Test lines:"
+      grep -nE '^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b' "$gen_norm" | head -n 50 || true
+    fi
+
+  # =========================
+  # FILTER (robusto): lavora su blocchi separati da una sentinel
+  # =========================
+  perl -0777 -i -pe '
+    # forza separatore stabile tra blocchi: inserisci una sentinel tra "} \n \n @Test"
+    s/\}\s*\n\s*\n\s*(@(?:[A-Za-z0-9_.]*\.)?Test\b)/}\n\n<<<SPLIT>>>\n\n$1/gm;
+
+    my @blocks = split(/\n\s*<<<SPLIT>>>\s*\n/, $_);
+    my @out;
+    for my $b (@blocks){
+      next if $b =~ /assertEquals\s*\([^;]*\bsetName\s*\(/; # assume return value
       push @out, $b;
     }
-    $_ = join("\n\n", @out) . "\n";
+    $_ = join("\n/*__TEST_BLOCK__*/\n", @out) . "\n";
   ' "$tmp_methods"
+
+  echo "[MERGE][DEBUG] tmp_methods AFTER SANITY size: $(wc -c < "$tmp_methods") bytes"
+  echo "[MERGE][DEBUG] tmp_methods AFTER FILTER size: $(wc -c < "$tmp_methods") bytes"
+
+    # ===== FIX A: dedup dei metodi di test nel generated per NOME =====
+    perl -0777 -i -pe '
+      my %seen;
+      my @blocks = split(/\n\s*\/\*__TEST_BLOCK__\*\/\s*\n/, $_);
+      my @out;
+      for my $b (@blocks) {
+        if ($b =~ /(?:public|protected|private)?\s*(?:static\s+)?void\s+(\w+)\s*\(/) {
+          my $n = $1;
+          next if $seen{$n}++;
+        }
+        push @out, $b;
+      }
+      $_ = join("\n/*__TEST_BLOCK__*/\n", @out) . "\n";
+    ' "$tmp_methods"
+
 
   # Rimuovi metodi che usano package palesemente errati generati dall'LLM
   grep -vE 'it\.unibo\.oop\.|it\.utente\.' "$tmp_methods" > "${tmp_methods}.f" \
     && mv "${tmp_methods}.f" "$tmp_methods"
 
-  # ===== FIX C: se il generated NON produce i nomi target, rinomina =====
-  # Per ogni nome target (tmp_names), se non esiste in tmp_methods,
-  # rinominiamo il primo metodo disponibile a quel nome.
-  while IFS= read -r need; do
-    need="$(sanitize_line "$need")"
-    [[ -z "$need" ]] && continue
+# =========================
+# NORMALIZE: evita @Test duplicati nello stesso blocco
+# - se un blocco contiene più @Test, tienine solo il primo
+# =========================
+perl -0777 -i -pe '
+  my @blocks = split(/\n\s*\/\*__TEST_BLOCK__\*\/\s*\n/, $_);
 
-    if ! grep -qE "public[[:space:]]+void[[:space:]]+$need[[:space:]]*\(" "$tmp_methods"; then
-      first="$(grep -m1 -E 'public[[:space:]]+void[[:space:]]+[A-Za-z0-9_]+' "$tmp_methods" \
-                | sed -E 's/.*void[[:space:]]+([A-Za-z0-9_]+).*/\1/')"
+  for my $b (@blocks) {
+    my $seen = 0;
+    # rimuove eventuali @Test extra (lascia solo il primo)
+    $b =~ s/^[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test\b.*\n/
+      $seen++ ? "" : $&/egm;
+  }
 
-      if [[ -n "$first" ]]; then
-        sed -i.bak -E "0,/public[[:space:]]+void[[:space:]]+$first[[:space:]]*\(/s//public void $need(/" "$tmp_methods"
-        rm -f "${tmp_methods}.bak" 2>/dev/null || true
-      fi
+  $_ = join("\n/*__TEST_BLOCK__*/\n", @blocks) . "\n";
+' "$tmp_methods"
+
+# =========================
+# MERGE fields + @Before into target (GENERICO)
+# IMPORTANT: va fatto PRIMA di inserire i @Test
+# =========================
+
+# 1) MERGE FIELDS (dedup): inserisce SOLO i campi mancanti nel target
+#    - dedup per NOME campo
+#    - inserisce subito dopo "public class X {"
+if [[ -s "$tmp_fields" ]]; then
+  local tmp_out_fields
+  tmp_out_fields="$(mktemp)"
+
+  awk -v fields_file="$tmp_fields" '
+    BEGIN{
+      # Carica campi dal generated (dedup per nome campo)
+      n=0
+      while((getline f < fields_file)>0){
+        gsub(/\r/,"",f)
+        sub(/^[ \t]+/,"",f)
+        sub(/[ \t]+$/,"",f)
+        if(f=="") continue
+
+        # estrae nome campo: ultima "parola" prima di ";"
+        name=f
+        sub(/;.*/,"",name)
+        sub(/.*[ \t]/,"",name)
+
+        # dedup dentro tmp_fields: tieni il primo che appare
+        if(!(name in fieldLine)){
+          fieldLine[name]=f
+          order[++n]=name
+        }
+      }
+      close(fields_file)
+    }
+
+    {
+      lines[NR]=$0
+
+      # Riconosce campi già presenti nel target (euristica semplice: access modifier + ... + name + ;)
+      if($0 ~ /^[[:space:]]*(public|protected|private)[[:space:]]+[^;=]+[[:space:]]+[A-Za-z0-9_]+[[:space:]]*(=[^;]*)?;/){
+        t=$0
+        sub(/^[ \t]+/,"",t)
+        sub(/;.*/,"",t)
+        sub(/.*[ \t]/,"",t)
+        existing[t]=1
+      }
+    }
+
+    END{
+      inserted=0
+      for(i=1;i<=NR;i++){
+        print lines[i]
+
+        # Inserisci subito dopo "public class X {"
+        if(inserted==0 && lines[i] ~ /^[[:space:]]*public[[:space:]]+class[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\{/){
+          addCount=0
+          for(j=1;j<=n;j++){
+            nm=order[j]
+            if(!(nm in existing)){
+              print "    " fieldLine[nm]
+              addCount++
+            }
+          }
+          if(addCount>0) print ""
+          inserted=1
+        }
+      }
+    }
+  ' "$test_file" > "$tmp_out_fields"
+
+  mv "$tmp_out_fields" "$test_file"
+fi
+
+# 2) Inserisci @Before se il target NON ce l'ha già, ma il generated sì
+if [[ -s "$tmp_before" ]]; then
+  if ! grep -qE '^[[:space:]]*@Before\b' "$test_file"; then
+    local tmp_out_before
+    tmp_out_before="$(mktemp)"
+    awk -v bef="$tmp_before" '
+      {lines[NR]=$0}
+      END{
+        ins=0
+        for(i=1;i<=NR;i++){
+          print lines[i]
+          if(ins==0 && lines[i] ~ /^[[:space:]]*public[[:space:]]+class[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\{/){
+            print ""
+            while((getline l < bef)>0) print l
+            close(bef)
+            print ""
+            ins=1
+          }
+        }
+      }
+    ' "$test_file" > "$tmp_out_before"
+    mv "$tmp_out_before" "$test_file"
+  fi
+fi
+
+# bonifica target da junit-jupiter (se presenti)
+sed -i.sedbak -E \
+  's/^[[:space:]]*import[[:space:]]+org\.junit\.jupiter\.api\.Test[[:space:]]*;[[:space:]]*$/import org.junit.Test;/' \
+  "$test_file" && rm -f "$test_file.sedbak"
+
+sed -i.sedbak -E \
+  's/^[[:space:]]*import[[:space:]]+org\.junit\.jupiter\.api\.BeforeEach[[:space:]]*;[[:space:]]*$/import org.junit.Before;/' \
+  "$test_file" && rm -f "$test_file.sedbak"
+
+  # bonifica target: @BeforeEach -> @Before (non basta cambiare solo l'import)
+  perl -pi -e 's/^\s*@BeforeEach\b/@Before/gm' "$test_file"
+
+# se ho @Before, assicura import org.junit.Before;
+if grep -qE '^[[:space:]]*@Before\b' "$test_file"; then
+  ensure_import "$test_file" "org.junit.Before"
+fi
+
+# se ho @Test, assicura import org.junit.Test;
+if grep -qE '^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b' "$test_file"; then
+  ensure_import "$test_file" "org.junit.Test"
+fi
+
+    # =========================
+    # REQUIRED base names (da coverage) per QUESTA test class
+    # =========================
+    if [[ -z "${REQUIRED_TESTS_FILE:-}" || ! -s "${REQUIRED_TESTS_FILE:-}" ]]; then
+      echo "[MERGE] REQUIRED_TESTS_FILE missing/empty -> cannot enforce required names"
+      rm -f "$tmp_methods" "$tmp_names"
+      return 1
     fi
-  done < "$tmp_names"
 
-  # Nomi target da rigenerare = quelli nella coverage-matrix (tests_to_regen_file)
-  # es: utente.personale.TecnicoTest.testSetName -> testSetName
-  awk -F. '{print $NF}' "$tests_to_regen_file" | sed 's/\r$//' | sort -u > "$tmp_names"
+    # calcola FQN della test class corrente (pkg + cls)
+    local pkg cls cls_fqn
+    pkg="$(grep -m1 -E '^[[:space:]]*package[[:space:]]+' "$test_file" | sed -E 's/^[[:space:]]*package[[:space:]]+([^;]+);.*/\1/')"
+    cls="$(basename "$test_file" .java)"
+    cls_fqn="${pkg}.${cls}"
+    # se pkg è vuoto, cls_fqn deve essere solo la classe (niente punto iniziale)
+    if [[ -z "$pkg" ]]; then
+      cls_fqn="$cls"
+    fi
+
+    # req_bases: lista dei nomi base richiesti (es: testSetName, testGetName, ...)
+    local req_bases
+    req_bases="$(mktemp)"
+    awk -v pref="${cls_fqn}." 'index($0,pref)==1 {print substr($0, length(pref)+1)}' \
+      "$REQUIRED_TESTS_FILE" | sed 's/\r$//' | sort -u > "$req_bases"
+
+
+        echo "[MERGE][DEBUG] cls_fqn='$cls_fqn'"
+        echo "[MERGE][DEBUG] REQUIRED_TESTS_FILE='$REQUIRED_TESTS_FILE' (first 10 lines for this class):"
+        grep -n "^${cls_fqn}\." "$REQUIRED_TESTS_FILE" | head -n 10 || true
+        echo "[MERGE][DEBUG] req_bases content:"
+        cat "$req_bases" || true
+
+    # =========================
+    # RENAME: per ogni required base B (es testSetName),
+    # rinomina i test generati in B_case1, B_case2, ...
+    # scegliendo prima quelli che chiamano .<prod>(
+    # =========================
+
+      echo "[MERGE][DEBUG] tmp_methods BEFORE RENAME (first 80 lines):"
+      nl -ba "$tmp_methods" | sed -n '1,80p' || true
+
+      echo "[MERGE][DEBUG] methods BEFORE rename:"
+      perl -ne 'print "$.:\t$1\n" if(/(?:public|protected|private)?\s*(?:static\s+)?void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" | head -n 40 || true
+
+echo "================ DEBUG RENAME START ================"
+echo "[DBG] tmp_methods path: $tmp_methods"
+echo "[DBG] tmp_methods size BEFORE rename: $(wc -c < "$tmp_methods") bytes"
+echo "[DBG] Methods BEFORE rename:"
+perl -ne 'print "$.:\t$1\n" if(/public\s+void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" || true
+echo "===================================================="
+
+    # --- FIX: SAFE RENAME to required bases ONLY when we can MATCH by prod call ---
+    # req_bases: testGetName -> prod getName ; testSetSurname -> prod setSurname ; ...
+    REQBASES="$req_bases" perl -0777 -i -pe '
+      my $reqfile = $ENV{REQBASES};
+      open my $fh, "<", $reqfile or die "cannot open REQBASES: $!";
+      my @req = ();
+     while (my $line = <$fh>) {
+         $line =~ s/\r?\n$//;
+         next if $line eq "";
+         push @req, $line;
+       }
+      close $fh;
+
+      # build map: required base -> prod method (testXxx -> xxx with lcfirst)
+      my %prod_of;
+      for my $b (@req){
+        (my $p = $b) =~ s/^test//;
+        $p = lcfirst($p);
+        $prod_of{$b} = $p;
+      }
+
+      my @blocks = split(/\n\s*\/\*__TEST_BLOCK__\*\/\s*\n/, $_);
+      my %k; # counters per base (required or fallback base)
+
+      for my $blk (@blocks){
+        next if $blk !~ /void\s+([A-Za-z0-9_]+)\s*\(/;
+        my $old = $1;
+
+        # choose target base:
+        # 1) if block calls .<prod>( for some required base, map to that required base
+        my $target = "";
+        for my $b (@req){
+          my $p = $prod_of{$b};
+          if($blk =~ /\.\Q$p\E\s*\(/){
+            $target = $b;
+            last;
+          }
+        }
+
+        # 2) else fallback to its own base (strip _caseN if any)
+        if($target eq ""){
+          ($target = $old) =~ s/_case\d+$//;
+        }
+
+        my $n = ++$k{$target};
+        my $new = $target . "_case" . $n;
+
+        # replace ONLY the method name in signature
+        $blk =~ s/\bvoid\s+\Q$old\E\s*\(/"void $new("/e;
+      }
+
+      $_ = join("\n/*__TEST_BLOCK__*/\n", @blocks) . "\n";
+    ' "$tmp_methods"
+
+    echo "================ DEBUG RENAME END =================="
+    echo "[DBG] tmp_methods size AFTER rename: $(wc -c < "$tmp_methods") bytes"
+    echo "[DBG] Methods AFTER rename:"
+    perl -ne 'print "$.:\t$1\n" if(/public\s+void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" || true
+    echo "===================================================="
+
+        # --- CANONICAL RENUMBER (stable): per ogni base, garantisci case1..caseN in ordine ---
+        perl -i -pe '
+          BEGIN { our %k; }
+          if (/^\s*public\s+void\s+([A-Za-z0-9_]+)\s*\(/) {
+            my $old = $1;
+            (my $b = $old) =~ s/_case\d+$//;
+            my $n = ++$k{$b};
+            my $new = $b . "_case" . $n;
+            s/\b\Q$old\E\b/$new/;
+          }
+        ' "$tmp_methods"
+        # --- END CANONICAL RENUMBER ---
+
+
+    # ricostruisci tmp_names coerente con i nuovi nomi
+    perl -0777 -ne '
+      while(/(?:public|protected|private)?\s*(?:static\s+)?void\s+([A-Za-z0-9_]+)\s*\(/g){
+        print "$1\n";
+      }
+    ' "$tmp_methods" | sed 's/\r$//' | sort -u > "$tmp_names"
+    # --- END FIX ---
+
+    # =========================
+    # regen_bases: basi davvero generate (da tmp_names)
+    # es: testGetName_case1 -> testGetName
+    # =========================
+    local regen_bases
+    regen_bases="$(mktemp)"
+    sed -E 's/_case[0-9]+$//' "$tmp_names" | sed 's/\r$//' | sort -u > "$regen_bases"
+
+    echo "[MERGE][DEBUG] regen_bases (derived from generated tests):"
+    cat "$regen_bases" || true
+
+    echo "[MERGE][DEBUG] methods AFTER CANONICAL RENUMBER:"
+    perl -ne 'print "$.:\t$1\n" if(/public\s+void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" | head -n 80 || true
+
+     echo "[MERGE][DEBUG] methods AFTER rename:"
+     perl -ne 'print "$.:\t$1\n" if(/public\s+void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" | head -n 60 || true
+
+    echo "[MERGE][DEBUG] tmp_names after rebuild:"
+    nl -ba "$tmp_names" | head -n 50 || true
+
 
   if [[ ! -s "$tmp_methods" || ! -s "$tmp_names" ]]; then
     echo "[MERGE] No @Test methods found in generated: $gen_file"
@@ -242,194 +793,831 @@ merge_generated_tests() {
     return 1
   fi
 
+    # =========================
+    # PRUNE per prefisso: rimuove dal target tutti i metodi che matchano ^base($|_)
+    # per ogni base in req_bases
+    # =========================
+    local tmp_pruned_prefix
+    tmp_pruned_prefix="$(mktemp)"
+
+    awk -v bases_file="$$regen_bases" '
+          BEGIN{
+            while((getline b < bases_file)>0){
+              gsub(/\r/,"",b);
+              if(b!="") bases[b]=1;
+            }
+            close(bases_file);
+
+            inBlock=0; inSkip=0; seenSig=0; started=0; brace=0;
+            buf=""; methodname="";
+          }
+
+          function extract_name(line,   t){
+            if(line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/){
+              t=line;
+              sub(/.*void[[:space:]]+/,"",t);
+              sub(/\(.*/,"",t);
+              gsub(/[[:space:]]+/,"",t);
+              return t;
+            }
+            return "";
+          }
+
+          function should_skip(n,   b){
+            for(b in bases){
+              if(n == b) return 1;
+              if(index(n, b "_")==1) return 1;  # base_case..., base_Whatever...
+            }
+            return 0;
+          }
+
+          # start on @Test
+          {
+            if(inBlock==0 && $0 ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
+              inBlock=1; buf=$0 "\n";
+              inSkip=0; seenSig=0; started=0; brace=0; methodname="";
+              next;
+            }
+
+            if(inBlock==1){
+              buf = buf $0 "\n";
+
+              if(seenSig==0){
+                methodname = extract_name($0);
+                if(methodname!=""){
+                  seenSig=1;
+                  if(should_skip(methodname)) inSkip=1;
+                }
+              }
+
+              if(seenSig==1){
+                if(started==0 && $0 ~ /\{/) started=1;
+                if(started==1){
+                  brace += gsub(/\{/,"{");
+                  brace -= gsub(/\}/,"}");
+                  if(brace==0){
+                    # end method
+                    if(inSkip==0) printf "%s", buf;
+                    inBlock=0; buf=""; inSkip=0; seenSig=0; started=0; brace=0; methodname="";
+                  }
+                }
+              }
+              next;
+            }
+
+            print;
+          }
+        ' "$test_file" > "$tmp_pruned_prefix"
+
+    mv "$tmp_pruned_prefix" "$test_file"
+
   # 4) Prune dal target i metodi @Test con lo stesso nome (no duplicati)
   local tmp_pruned
   tmp_pruned="$(mktemp)"
 
   awk -v names_file="$tmp_names" '
-    BEGIN{
-      while((getline n < names_file)>0){
-        gsub(/\r/,"",n);
-        names[n]=1
-      }
-      close(names_file)
-      inCandidate=0
-      inSkip=0
-      started=0
-      brace=0
-      methodname=""
-      buf=""
-    }
+      BEGIN{
+        while((getline n < names_file)>0){
+          gsub(/\r/,"",n);
+          if(n!="") names[n]=1;
+        }
+        close(names_file);
 
-    function extract_name(line,   t){
-      if(line ~ /^[[:space:]]*public[[:space:]]+void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/){
-        t=line
-        sub(/.*void[[:space:]]+/,"",t)
-        sub(/\(.*/,"",t)
-        gsub(/[[:space:]]+/,"",t)
-        return t
-      }
-      return ""
-    }
-
-    # start candidate on @Test
-    {
-      if(inSkip==0 && inCandidate==0 && $0 ~ /^[[:space:]]*@([a-zA-Z0-9_.]*\.)?Test\b/){
-        inCandidate=1
-        buf=$0 "\n"
-        started=0
-        brace=0
-        methodname=""
-        next
+        inBlock=0; inSkip=0; seenSig=0; started=0; brace=0;
+        buf=""; methodname="";
       }
 
-      if(inCandidate==1){
-        buf = buf $0 "\n"
-        if(methodname=="" ){
-          methodname = extract_name($0)
-          if(methodname!="" && (methodname in names)){
-            # skip this whole method block
-            inSkip=1
-            inCandidate=0
-            # count braces only after first "{"
-            if($0 ~ /\{/) started=1
-            if(started==1){
-              brace += gsub(/\{/,"{")
-              brace -= gsub(/\}/,"}")
-              if(brace==0){ inSkip=0 } # one-liner method (rare)
+      function extract_name(line,   t){
+        if(line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/){
+          t=line;
+          sub(/.*void[[:space:]]+/,"",t);
+          sub(/\(.*/,"",t);
+          gsub(/[[:space:]]+/,"",t);
+          return t;
+        }
+        return "";
+      }
+
+      {
+        if(inBlock==0 && $0 ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
+          inBlock=1; buf=$0 "\n";
+          inSkip=0; seenSig=0; started=0; brace=0; methodname="";
+          next;
+        }
+
+        if(inBlock==1){
+          buf = buf $0 "\n";
+
+          if(seenSig==0){
+            methodname = extract_name($0);
+            if(methodname!=""){
+              seenSig=1;
+              if(methodname in names) inSkip=1;  # elimina il metodo target
             }
-            next
           }
+
+          if(seenSig==1){
+            if(started==0 && $0 ~ /\{/) started=1;
+            if(started==1){
+              brace += gsub(/\{/,"{");
+              brace -= gsub(/\}/,"}");
+              if(brace==0){
+                if(inSkip==0) printf "%s", buf;
+                inBlock=0; buf=""; inSkip=0; seenSig=0; started=0; brace=0; methodname="";
+              }
+            }
+          }
+          next;
         }
 
-        # Not a target method -> flush candidate buffer and continue as normal
-        printf "%s", buf
-        inCandidate=0
-        buf=""
-        next
+        print;
       }
-
-      if(inSkip==1){
-        if(started==0 && $0 ~ /\{/) started=1
-        if(started==1){
-          brace += gsub(/\{/,"{")
-          brace -= gsub(/\}/,"}")
-          if(brace==0){ inSkip=0 }
-        }
-        next
-      }
-
-      print
-    }
-  ' "$test_file" > "$tmp_pruned"
+    ' "$test_file" > "$tmp_pruned"
 
   mv "$tmp_pruned" "$test_file"
 
-  # ===== FIX B: evita di INSERIRE metodi che esistono già nel target =====
-  # Se un metodo esiste già e NON è tra quelli da sostituire (tmp_names),
-  # lo scartiamo da tmp_methods per evitare "method already defined".
-  local tmp_existing
-  tmp_existing="$(mktemp)"
+  # remove block separators before insertion
+  sed -i.bak '/\/\*__TEST_BLOCK__\*\//d' "$tmp_methods" || true
+  rm -f "${tmp_methods}.bak" 2>/dev/null || true
 
-  grep -E '^[[:space:]]*public[[:space:]]+void[[:space:]]+[A-Za-z0-9_]+\s*\(' "$test_file" \
-    | sed -E 's/.*void[[:space:]]+([A-Za-z0-9_]+).*/\1/' \
-    | sort -u > "$tmp_existing"
+  # =========================
+  # STRONG PRUNE by required bases (annotation-aware)
+  # Rimuove dal target TUTTI i metodi @Test il cui nome è:
+  #   - base
+  #   - base_caseN
+  # =========================
+  local tmp_pruned_bases
+  tmp_pruned_bases="$(mktemp)"
 
-  EXISTING="$tmp_existing" REPLACE="$tmp_names" perl -0777 -i -pe '
-    use strict;
-    my %existing;
-    my %replace;
-
-    open my $e, "<", $ENV{EXISTING} or die $!;
-    while(<$e>){ chomp; $existing{$_}=1 if $_ ne "" }
-    close $e;
-
-    open my $r, "<", $ENV{REPLACE} or die $!;
-    while(<$r>){ chomp; $replace{$_}=1 if $_ ne "" }
-    close $r;
-
-    my @blocks = split(/\n\s*\n/, $_);
-    my @out;
-
-    for my $b (@blocks){
-      if($b =~ /public\s+void\s+(\w+)\s*\(/){
-        my $n=$1;
-        # se esiste già nel target e non è in replace => non inserirlo
-        next if ($existing{$n} && !$replace{$n});
+  awk -v bases_file="$regen_bases" '
+    BEGIN{
+      while((getline b < bases_file)>0){
+        gsub(/\r/,"",b);
+        if(b!="") bases[b]=1;
       }
-      push @out, $b;
+      close(bases_file);
+
+      inBlock=0; buf=""; brace=0; started=0; name="";
     }
 
-    $_ = join("\n\n", @out) . "\n";
-  ' "$tmp_methods"
-
-  rm -f "$tmp_existing" 2>/dev/null || true
-
-  # 5) Inserisci i nuovi metodi prima dell’ultima }
-  local tmp_out
-  tmp_out="$(mktemp)"
-  awk -v addfile="$tmp_methods" '
-    {lines[NR]=$0}
-    END{
-      last=NR
-      for(i=NR;i>=1;i--){
-        if(lines[i] ~ /^[[:space:]]*}[[:space:]]*$/){ last=i; break }
+    function extract_name(line,   t){
+      if(line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/){
+        t=line;
+        sub(/.*void[[:space:]]+/,"",t);
+        sub(/\(.*/,"",t);
+        gsub(/[[:space:]]+/,"",t);
+        return t;
       }
-      for(i=1;i<last;i++) print lines[i]
-      print ""
-      while((getline l < addfile)>0) print l
-      close(addfile)
-      for(i=last;i<=NR;i++) print lines[i]
+      return "";
     }
-  ' "$test_file" > "$tmp_out"
 
-  mv "$tmp_out" "$test_file"
+    function matches_required(n,   b){
+      for(b in bases){
+        if(n == b) return 1;
+        if(index(n, b "_case")==1) return 1;
+      }
+      return 0;
+    }
+
+    {
+      # start block at @Test
+      if(inBlock==0 && $0 ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
+        inBlock=1; buf=$0 "\n"; brace=0; started=0; name="";
+        next;
+      }
+
+      if(inBlock==1){
+        buf = buf $0 "\n";
+
+        if(name==""){
+          n = extract_name($0);
+          if(n!="") name=n;
+        }
+
+        if(started==0 && $0 ~ /\{/) started=1;
+        if(started==1){
+          line=$0;
+          o=gsub(/\{/,"{",line);
+          c=gsub(/\}/,"}",line);
+          brace += o; brace -= c;
+
+          if(brace==0){
+            # end block: stampa solo se NON matcha required base/case
+            if(name=="" || !matches_required(name)) printf "%s", buf;
+            inBlock=0; buf=""; brace=0; started=0; name="";
+          }
+        }
+        next;
+      }
+
+      print;
+    }
+  ' "$test_file" > "$tmp_pruned_bases"
+
+  mv "$tmp_pruned_bases" "$test_file"
+
+  # =========================
+  # HARD FIX: se il file termina con "@Test" (orfano), rimuovilo dalla coda
+  # =========================
+  perl -0777 -i -pe '
+    s/(\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[ \t]*\n[ \t]*\z)/\n/s;
+    s/(\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[ \t]*\z)/\n/s;
+  ' "$test_file"
+
+  # =========================
+  # PRE-INSERT CLEANUP: rimuovi @Test orfani nel TARGET
+  # (es. "@Test" non seguito da una signature "void nome(")
+  # Questo evita file che finiscono con "@Test" e manca la "}" di classe.
+  # =========================
+  local tmp_orphan
+  tmp_orphan="$(mktemp)"
+  awk '
+    { lines[NR]=$0 }
+    END {
+      for (i=1; i<=NR; i++) {
+        if (lines[i] ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b[[:space:]]*$/) {
+          j=i+1
+          while (j<=NR && lines[j] ~ /^[[:space:]]*$/) j++
+          # se dopo c è un altro @Test o EOF o non c è una signature di metodo -> scarta questo @Test
+          if (j>NR) continue
+          if (lines[j] ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/) continue
+          if (lines[j] !~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/) continue
+        }
+        print lines[i]
+      }
+    }
+  ' "$test_file" > "$tmp_orphan"
+  mv "$tmp_orphan" "$test_file"
+
+# Normalizza CRLF -> LF sul target per rendere affidabili awk/grep/perl
+perl -pi -e 's/\r$//mg' "$test_file"
+
+    # =========================
+    # CLEANUP: rimuovi @Test orfani (es. "@Test" seguito da vuoto o da un altro @Test)
+    # =========================
+    local tmp_clean
+    tmp_clean="$(mktemp)"
+    awk '
+      {
+        lines[NR]=$0
+      }
+      END{
+        for(i=1;i<=NR;i++){
+          # se la riga è "@Test" e la prossima non è una signature, la scarto
+          if(lines[i] ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b[[:space:]]*\r?$/){
+            j=i+1
+            while(j<=NR && lines[j] ~ /^[[:space:]]*$/) j++
+            if(j<=NR && lines[j] ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/) { continue }
+            if(j<=NR && lines[j] !~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/) { continue }
+          }
+          print lines[i]
+        }
+      }
+    ' "$test_file" > "$tmp_clean"
+    mv "$tmp_clean" "$test_file"
+
+      # =========================
+      # FIX STRUCTURE (target): se un metodo precedente è rimasto aperto e arriva un nuovo @Test,
+      # chiudi automaticamente le graffe fino a tornare al livello della classe.
+      # Questo impedisce inserimenti "dentro" un metodo (come il tuo testSetCode()).
+      # =========================
+      local tmp_fix
+      tmp_fix="$(mktemp)"
+
+      awk '
+        BEGIN{depth=0}
+
+        function delta_braces(s,   t,o,c){
+          t=s; o=gsub(/\{/,"{",t)
+          t=s; c=gsub(/\}/,"}",t)
+          return o-c
+        }
+
+        {
+          line=$0
+
+          # Se compare un @Test mentre siamo dentro un metodo (depth > 1),
+          # chiudiamo fino a tornare al livello classe (depth==1).
+          if(line ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
+            while(depth > 1){
+              print "    }"
+              depth--
+            }
+          }
+
+          print line
+          depth += delta_braces(line)
+        }
+
+        END{
+          # Se il file finisce ancora dentro un metodo, chiudi fino a livello classe
+          while(depth > 1){
+            print "    }"
+            depth--
+          }
+        }
+      ' "$test_file" > "$tmp_fix" && mv "$tmp_fix" "$test_file"
+
+      # Normalizza CRLF -> LF sul target
+      perl -pi -e 's/\r$//mg' "$test_file"
+
+    # 5) Inserisci i nuovi metodi prima della "}" che chiude la CLASSE
+        # (cioè una "}" standalone dopo la quale ci sono solo righe vuote)
+        local tmp_out
+        tmp_out="$(mktemp)"
+
+        # =========================
+        # PRE-INSERT STRUCTURE FIX (robusto e unico)
+        # - normalizza CRLF
+        # - rimuove @Test orfani in coda
+        # - se compare un @Test mentre siamo dentro un metodo, chiude il metodo PRIMA dell'@Test
+        # - assicura che il file termini con una "}" standalone (chiusura classe)
+        # =========================
+        perl -pi -e 's/\r$//mg' "$test_file"
+
+        local tmp_fix_pre
+        tmp_fix_pre="$(mktemp)"
+
+        awk '
+          BEGIN{depth=0}
+
+          function delta_braces(s,   t,o,c){
+            t=s; o=gsub(/\{/,"{",t)
+            t=s; c=gsub(/\}/,"}",t)
+            return o-c
+          }
+
+          {
+            line=$0
+
+            # Se arriva un @Test mentre siamo dentro un metodo (depth>1),
+            # chiudi fino a tornare al livello classe (depth==1) PRIMA di stampare @Test.
+            if(line ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
+              while(depth > 1){
+                print "    }"
+                depth--
+              }
+            }
+
+            print line
+            depth += delta_braces(line)
+          }
+
+          END{
+            # chiudi eventuali metodi lasciati aperti
+            while(depth > 1){
+              print "    }"
+              depth--
+            }
+          }
+        ' "$test_file" > "$tmp_fix_pre" && mv "$tmp_fix_pre" "$test_file"
+
+        # Rimuovi eventuali @Test orfani in fondo (solo in coda file)
+        perl -0777 -i -pe '
+          1 while s/\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[ \t]*\n[ \t]*\z/\n/s;
+          1 while s/\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[ \t]*\z/\n/s;
+        ' "$test_file"
+
+        # Assicura che l\'ultima riga non-vuota sia "}"
+        last_nonempty="$(grep -nve "^[[:space:]]*$" "$test_file" | tail -n 1 | cut -d: -f2-)"
+        if ! echo "$last_nonempty" | grep -qE "^[[:space:]]*}[[:space:]]*$"; then
+          echo "}" >> "$test_file"
+        fi
+
+        # GUARD: l'ultima riga non-vuota DEVE essere una "}" standalone (chiusura classe)
+        last_nonempty="$(grep -nve '^[[:space:]]*$' "$test_file" | tail -n 1 | cut -d: -f2-)"
+        if ! echo "$last_nonempty" | grep -qE '^[[:space:]]*}[[:space:]]*$'; then
+          echo "[MERGE][FATAL] Target test file does NOT end with a standalone '}' (class close). Refusing to insert."
+          echo "[MERGE][FATAL] Last non-empty line: $last_nonempty"
+          exit 1
+        fi
+
+        awk -v addfile="$tmp_methods" '
+          function count_braces(s,   t,o,c){
+            t=s; o=gsub(/\{/,"{",t)
+            t=s; c=gsub(/\}/,"}",t)
+            return o-c
+          }
+
+          BEGIN{
+            depth=0
+            class_started=0
+            insert_line=-1
+          }
+
+          { lines[NR]=$0 }
+
+          END{
+            # trova la chiusura della classe via depth:
+            # entra quando vede la prima "{", poi quando depth torna a 0 è la "}" della classe
+            for(i=1;i<=NR;i++){
+              d = count_braces(lines[i])
+
+              if(class_started==0){
+                if(d>0) class_started=1
+              }
+
+              if(class_started==1){
+                depth += d
+                if(depth==0){
+                  insert_line=i
+                  break
+                }
+              }
+            }
+
+            if(insert_line==-1){
+              print "[MERGE][FATAL] Could not find class-closing brace by depth." > "/dev/stderr"
+              exit 2
+            }
+
+            for(i=1;i<insert_line;i++) print lines[i]
+            print ""
+            while((getline l < addfile)>0) print l
+            close(addfile)
+            print ""
+            for(i=insert_line;i<=NR;i++) print lines[i]
+          }
+        ' "$test_file" > "$tmp_out" && mv "$tmp_out" "$test_file"
+
+        # GUARD immediato (corretto): verifica solo le basi DAVVERO generate
+        gen_bases="$(mktemp)"
+
+        # ricava le basi dal tmp_names (testX_caseN -> testX)
+        sed -E 's/_case[0-9]+$//' "$tmp_names" | sed 's/\r$//' | sort -u > "$gen_bases"
+
+        missing=0
+        while IFS= read -r base; do
+          base="$(sanitize_line "$base")"
+          [[ -z "$base" ]] && continue
+
+          if ! grep -qE "public[[:space:]]+void[[:space:]]+${base}_case1[[:space:]]*\\(" "$test_file"; then
+            echo "[MERGE][FATAL] Insert failed: ${base}_case1 not present RIGHT AFTER insertion."
+            missing=1
+          fi
+        done < "$gen_bases"
+
+        rm -f "$gen_bases"
+
+        if [[ "$missing" == "1" ]]; then
+          echo "[MERGE][FATAL] Tail of file for debug:"
+          tail -n 200 "$test_file"
+          exit 1
+        fi
+
+    # =========================
+    # FIX STRUCTURE (POST-INSERT): se qualche metodo precedente è rimasto aperto,
+    # chiudi le graffe prima che gli @Test inseriti risultino "dentro" un altro metodo.
+    # =========================
+    tmp_fix="$(mktemp)"
+    awk '
+      BEGIN{depth=0}
+
+      function delta_braces(s,   t,o,c){
+        t=s; o=gsub(/\{/,"{",t)
+        t=s; c=gsub(/\}/,"}",t)
+        return o-c
+      }
+
+      {
+        line=$0
+
+        # Se compare un @Test mentre siamo dentro un metodo (depth > 1),
+        # chiudiamo fino a tornare al livello classe (depth==1).
+        if(line ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
+          while(depth > 1){
+            print "    }"
+            depth--
+          }
+        }
+
+        print line
+        depth += delta_braces(line)
+      }
+
+      END{
+        # Se il file finisce ancora dentro un metodo, chiudi fino a livello classe
+        while(depth > 1){
+          print "    }"
+          depth--
+        }
+      }
+    ' "$test_file" > "$tmp_fix" && mv "$tmp_fix" "$test_file"
+
+    # Normalizza CRLF -> LF (again)
+    perl -pi -e 's/\r$//mg' "$test_file"
+
+    # =========================
+    # HARD PRUNE BASE BY SIGNATURE (robusto):
+    # se esiste base_caseN, elimina SEMPRE il metodo base "base" (anche senza @Test)
+    # =========================
+    while IFS= read -r base; do
+      base="$(sanitize_line "$base")"
+      [[ -z "$base" ]] && continue
+
+      if grep -qE "\b${base}_case[0-9]+\s*\(" "$test_file"; then
+        tmp_drop="$(mktemp)"
+        awk -v target="$base" '
+          BEGIN{drop=0; brace=0; started=0}
+          function is_sig(line){
+            return (line ~ "^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+" target "[[:space:]]*\\(")
+          }
+          {
+            if(drop==0 && is_sig($0)){
+              drop=1; brace=0; started=0;
+              next
+            }
+            if(drop==1){
+              if(started==0 && $0 ~ /\{/) started=1
+              if(started==1){
+                line=$0
+                o=gsub(/\{/,"{",line); c=gsub(/\}/,"}",line)
+                brace += o; brace -= c
+                if(brace==0){ drop=0; started=0 }
+              }
+              next
+            }
+            print
+          }
+        ' "$test_file" > "$tmp_drop" && mv "$tmp_drop" "$test_file"
+      fi
+    done < "$regen_bases"
+
+    echo "[MERGE][DEBUG] check that testSetCode is closed before next @Test:"
+    grep -nE "public[[:space:]]+void[[:space:]]+testSetCode|^[[:space:]]*}[[:space:]]*$|^[[:space:]]*@Test\b" "$test_file" | sed -n '1,120p'
+
+    # =========================
+    # FINAL CLEANUP: collassa @Test duplicati consecutivi (anche con righe vuote in mezzo)
+    # =========================
+    perl -0777 -i -pe '
+      1 while s/(\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[ \t]*\n)(\s*\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[ \t]*\n)/$1/gm;
+    ' "$test_file"
+
+    echo "[MERGE][DEBUG] after insertion, checking for case1:"
+    grep -nE "public[[:space:]]+void[[:space:]]+test[A-Za-z0-9_]+_case[0-9]+[[:space:]]*\(" "$test_file" | head -n 50 || true
+
+    # =========================
+    # HARD PRUNE (annotation-aware):
+    # se esistono ${base}_caseN, elimina il metodo base ${base}
+    # rimuovendo anche la @Test immediatamente sopra (se presente)
+    # =========================
+    while IFS= read -r base; do
+      base="$(sanitize_line "$base")"
+      [[ -z "$base" ]] && continue
+
+      # se ho almeno un case, elimino il base
+      if grep -qE "^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[[:space:]]+${base}_case[0-9]+[[:space:]]*\(" "$test_file"; then
+        local tmp_hard
+        tmp_hard="$(mktemp)"
+        awk -v target="$base" '
+          BEGIN{
+            inBlock=0; skipping=0; brace=0; started=0; name=""; buf="";
+          }
+          function extract_name(line,   t){
+            if(line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/){
+              t=line; sub(/.*void[[:space:]]+/,"",t); sub(/\(.*/,"",t); gsub(/[[:space:]]+/,"",t); return t;
+            }
+            return "";
+          }
+          {
+            # start block at @Test
+            if(inBlock==0 && $0 ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
+              inBlock=1; buf=$0 "\n"; name=""; brace=0; started=0;
+              next;
+            }
+
+            if(inBlock==1){
+              buf = buf $0 "\n";
+
+              if(name==""){
+                n = extract_name($0);
+                if(n!="") name=n;
+              }
+
+              if(started==0 && $0 ~ /\{/) started=1;
+              if(started==1){
+                line=$0;
+                o=gsub(/\{/,"{",line);
+                c=gsub(/\}/,"}",line);
+                brace += o; brace -= c;
+
+                if(brace==0){
+                  # end of method block
+                  if(name != target) printf "%s", buf;  # keep only if not the base
+                  inBlock=0; buf=""; name=""; brace=0; started=0;
+                }
+              }
+              next;
+            }
+
+            print;
+          }
+        ' "$test_file" > "$tmp_hard"
+        mv "$tmp_hard" "$test_file"
+      fi
+    done < "$regen_bases"
+
+  # =========================
+  # FORCE-REMOVE required base tests from target
+  # (generic: if we are regenerating testX, the old testX must go)
+  # =========================
+  while IFS= read -r base; do
+    base="$(sanitize_line "$base")"
+    [[ -z "$base" ]] && continue
+
+    tmp_rm_base="$(mktemp)"
+    awk -v target="$base" '
+      BEGIN{inBlock=0; buf=""; brace=0; started=0; name=""}
+
+      function extract_name(line,   t){
+        if(line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/){
+          t=line; sub(/.*void[[:space:]]+/,"",t); sub(/\(.*/,"",t); gsub(/[[:space:]]+/,"",t); return t;
+        }
+        return "";
+      }
+
+      {
+        if(inBlock==0 && $0 ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
+          inBlock=1; buf=$0 "\n"; brace=0; started=0; name="";
+          next;
+        }
+
+        if(inBlock==1){
+          buf = buf $0 "\n";
+
+          if(name==""){
+            n = extract_name($0);
+            if(n!="") name=n;
+          }
+
+          if(started==0 && $0 ~ /\{/) started=1;
+          if(started==1){
+            line=$0;
+            o=gsub(/\{/,"{",line);
+            c=gsub(/\}/,"}",line);
+            brace += o; brace -= c;
+
+            if(brace==0){
+              # end of method block
+              if (name != target) printf "%s", buf
+              inBlock=0; buf=""; name=""; brace=0; started=0;
+            }
+          }
+          next;
+        }
+
+        print;
+      }
+    ' "$test_file" > "$tmp_rm_base" && mv "$tmp_rm_base" "$test_file"
+  done < "$regen_bases"
+
+  # =========================
+  # FINAL DEDUP (annotation-aware): deduplica blocchi @Test per nome metodo
+  # =========================
+  tmp_dedup="$(mktemp)"
+  awk '
+    BEGIN{inBlock=0; buf=""; brace=0; started=0; name=""; }
+    function extract_name(line,   t){
+      if(line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/){
+        t=line; sub(/.*void[[:space:]]+/,"",t); sub(/\(.*/,"",t); gsub(/[[:space:]]+/,"",t); return t
+      }
+      return ""
+    }
+    {
+      if(inBlock==0 && $0 ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
+        inBlock=1; buf=$0 "\n"; brace=0; started=0; name=""
+        next
+      }
+      if(inBlock==1){
+        buf = buf $0 "\n"
+        if(name=="" ){ n=extract_name($0); if(n!="") name=n }
+        if(started==0 && $0 ~ /\{/) started=1
+        if(started==1){
+          brace += gsub(/\{/,"{"); brace -= gsub(/\}/,"}")
+          if(brace==0){
+            if(name=="" || seen[name]++==0) printf "%s", buf
+            inBlock=0; buf=""; brace=0; started=0; name=""
+          }
+        }
+        next
+      }
+      print
+    }
+  ' "$test_file" > "$tmp_dedup"
+  mv "$tmp_dedup" "$test_file"
+
+
+  # =========================
+  # FORCE REMOVE base test methods when cases exist
+  # - se esistono base_caseN, rimuovi SEMPRE il metodo base "base"
+  #   (anche se la precedente hard prune non ha matchato)
+  # =========================
+  while IFS= read -r base; do
+    base="$(sanitize_line "$base")"
+    [[ -z "$base" ]] && continue
+
+    # se esiste almeno un case, elimina il metodo base
+    if grep -qE "void[[:space:]]+${base}_case[0-9]+[[:space:]]*\(" "$test_file"; then
+      tmp_force="$(mktemp)"
+      awk -v target="$base" '
+        BEGIN{inBlock=0; brace=0; started=0; name=""; buf=""; prevTest="";}
+
+        function is_sig(line){
+          return (line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/)
+        }
+        function extract_name(line,   t){
+          t=line; sub(/.*void[[:space:]]+/,"",t); sub(/\(.*/,"",t); gsub(/[[:space:]]+/,"",t); return t
+        }
+        function brace_delta(s,   t,o,c){
+          t=s; o=gsub(/\{/,"{",t)
+          t=s; c=gsub(/\}/,"}",t)
+          return o-c
+        }
+
+        {
+          # cattura @Test ma NON stamparlo subito
+          if(inBlock==0 && $0 ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test([[:space:]]|\(|$)/){
+            prevTest=$0
+            next
+          }
+
+          # inizia un blocco SOLO se avevo @Test sopra
+          if(inBlock==0 && prevTest!="" && is_sig($0)){
+            name = extract_name($0)
+            inBlock=1; buf=""
+            buf = prevTest "\n"; prevTest=""
+            buf = buf $0 "\n"
+
+            brace=0; started=0
+            # conta anche la riga signature (può contenere "{")
+            d = brace_delta($0)
+            if(d != 0){
+              started=1
+              brace += d
+            }
+            next
+          }
+
+          if(inBlock==1){
+            buf = buf $0 "\n"
+            if(started==0 && $0 ~ /\{/) started=1
+            if(started==1){
+              brace += brace_delta($0)
+              if(brace==0){
+                # fine metodo: stampa solo se NON è il target
+                if(name != target) printf "%s", buf
+                inBlock=0; buf=""; name=""; brace=0; started=0
+              }
+            }
+            next
+          }
+
+          # se @Test non è seguito da una signature, ristampalo
+          if(prevTest!=""){
+            print prevTest
+            prevTest=""
+          }
+          print
+        }
+
+        END{
+          if(prevTest!="") print prevTest
+        }
+      ' "$test_file" > "$tmp_force" && mv "$tmp_force" "$test_file"
+    fi
+  done < "$regen_bases"
 
   rm -f "$tmp_methods" "$tmp_names"
-  rm -f "$gen_file"
+  rm -f "$tmp_fields" "$tmp_before"
+  #rm -f "$gen_file"
 
-  # ===== FIX import static Assert.* se servono assertNull/assertTrue/etc =====
-  # Se il file usa assertNull e non ha Assert.* allora forza Assert.*.
-  if grep -qE '\bassertNull\s*\(' "$test_file"; then
-    if ! grep -qE 'import[[:space:]]+static[[:space:]]+org\.junit\.Assert\.\*;' "$test_file"; then
-      # Se c'è un import static specifico (es. assertEquals), lo rimpiazzo con Assert.*
-      if grep -qE 'import[[:space:]]+static[[:space:]]+org\.junit\.Assert\.' "$test_file"; then
-        sed -i.bak -E \
-          's/import[[:space:]]+static[[:space:]]+org\.junit\.Assert\.[A-Za-z0-9_]+\s*;/import static org.junit.Assert.*;/' \
-          "$test_file" || true
-        rm -f "${test_file}.bak" 2>/dev/null || true
-      else
-        awk '
-          BEGIN{added=0}
-          {
-            print
-            if($0 ~ /^import /) lastImportLine=NR
-            if($0 ~ /^package /) pkgLine=NR
-            lines[NR]=$0
-          }
-          END{
-            # (non usiamo lines qui, ma teniamo pkgLine per logica)
-          }
-        ' "$test_file" > /dev/null
-
-        awk '
-          BEGIN{added=0; sawImport=0}
-          /^import / {sawImport=1}
-          {print}
-          # quando finisce la zona import (prima riga non-import dopo almeno un import)
-          (sawImport==1 && $0 !~ /^import / && added==0){
-            print "import static org.junit.Assert.*;"
-            added=1
-          }
-          END{
-            # se non c erano import, inseriscilo dopo package (cioè lo mettiamo in testa qui)
-            # ma per non rischiare import prima del package, se added==0 NON facciamo nulla:
-            # in quel caso conviene lasciare stare o gestire con sed mirata.
-          }
-        ' "$test_file" > "${test_file}.tmp" && mv "${test_file}.tmp" "$test_file"
-      fi
+    # ===== Ensure static org.junit.Assert.* if any assert* is used =====
+    if grep -qE '\bassert(A|T|F|N|E)[A-Za-z0-9_]*\s*\(' "$test_file"; then
+      ensure_static_import "$test_file" "org.junit.Assert.*"
     fi
-  fi
+
+# =========================
+# FINAL CANONICAL RENUMBER ON TARGET
+# =========================
+while IFS= read -r base; do
+  base="$(sanitize_line "$base")"
+  [[ -z "$base" ]] && continue
+
+  BASE="$base" perl -0777 -i -pe '
+    my $base = $ENV{BASE};
+    my $k = 0;
+    s/\bvoid\s+\Q$base\E_case\d+\s*\(/"void ".$base."_case".(++$k)."("/ge;
+  ' "$test_file"
+done < "$regen_bases"
+
+echo "[MERGE][DEBUG] TARGET methods AFTER FINAL RENUMBER (first 50 case methods):"
+grep -nE "public[[:space:]]+void[[:space:]]+test[A-Za-z0-9_]+_case[0-9]+[[:space:]]*\(" "$test_file" | head -n 50 || true
+
+# salva per debug e poi elimina generated (per evitare compile doppio)
+  rm -f "$regen_bases"
+  cp -f "$gen_file" "${gen_file}.last" 2>/dev/null || true
+  rm -f "$gen_file" 2>/dev/null || true
+  rm -f "$gen_norm" 2>/dev/null || true
 
   echo "[MERGE] Replaced/added regenerated @Test methods into: $test_file"
   return 0
@@ -707,61 +1895,88 @@ branch_modified() {
     echo "[BRANCH i] Test classes to validate (this entry):"
     cat "$test_classes_file"
 
-    # 3) Prune JUnit test methods for THIS entry (bench prune is done only on success)
-    echo "[BRANCH i] Pruning old JUnit test methods (this entry)..."
-    java -cp "$AST_JAR" TestPruner "$tmp_tests_to_regen" "$TEST_ROOT"
+    # 3) Prune JUnit test methods for THIS entry (bench prune is done only on success) (modificato momentaneamente)
+    #echo "[BRANCH i] Pruning old JUnit test methods (this entry)..."
+    #java -cp "$AST_JAR" TestPruner "$tmp_tests_to_regen" "$TEST_ROOT"
 
     # 4) Retry loop for THIS entry
-    local attempt=1
-    while [[ "$attempt" -le "$MAX_CHAT2UNITTEST_ATTEMPTS" ]]; do
-      sep
-      echo "[BRANCH i] Entry attempt $attempt/$MAX_CHAT2UNITTEST_ATTEMPTS for $class_fqn"
+    # Backup "pristine" UNA SOLA VOLTA (fuori dal retry loop)
+          while IFS= read -r cls; do
+            cls="$(sanitize_line "$cls")"
+            [[ -z "$cls" ]] && continue
 
-      # Backup old test files involved for this entry
-      unset backups
-      declare -A backups=()
+            tf="$(fqn_to_test_path "$cls")"
+            bak="${tf}.pristine"
+
+            if [[ -f "$tf" && ! -f "$bak" ]]; then
+              cp -f "$tf" "$bak"
+              echo "[BRANCH i] Saved pristine backup: $bak"
+            fi
+          done < "$test_classes_file"
+
+          local attempt=1
+          while [[ "$attempt" -le "$MAX_CHAT2UNITTEST_ATTEMPTS" ]]; do
+            sep
+            echo "[BRANCH i] Entry attempt $attempt/$MAX_CHAT2UNITTEST_ATTEMPTS for $class_fqn"
+
+            # Ripristina SEMPRE il target dal pristine ad ogni attempt (riparti pulito)
+            while IFS= read -r cls; do
+              cls="$(sanitize_line "$cls")"
+              [[ -z "$cls" ]] && continue
+
+              tf="$(fqn_to_test_path "$cls")"
+              bak="${tf}.pristine"
+
+              if [[ -f "$bak" ]]; then
+                cp -f "$bak" "$tf"
+                echo "[BRANCH i] Restored pristine backup into target: $tf"
+              fi
+            done < "$test_classes_file"
+
+            # Run Chat2UnitTest ONLY for this entry
+            echo "[BRANCH i] Running Chat2UnitTest (single entry)..."
+            java -jar "$CHAT2UNITTEST_JAR" "$single_json" \
+              -host "$CHAT2UNITTEST_HOST" \
+              -mdl "$CHAT2UNITTEST_MODEL" \
+              -tmp "$CHAT2UNITTEST_TEMP"
+
+            # =========================
+            # MERGE generated -> target
+            # (MUST happen BEFORE guard/gradle)
+            # =========================
+            export REQUIRED_TESTS_FILE="$tmp_tests_to_regen"
+            local merge_failed=0
+
+            while IFS= read -r cls; do
+              cls="$(sanitize_line "$cls")"
+              [[ -z "$cls" ]] && continue
+
+              local tf
+              tf="$(fqn_to_test_path "$cls")"
+
+              if ! merge_generated_tests "$tf"; then
+                echo "[BRANCH i] Merge failed for $tf"
+                merge_failed=1
+              else
+                # IMPORTANT: do not let *.generated.java be compiled by Gradle
+                rm -f "${tf%.java}.generated.java" 2>/dev/null || true
+              fi
+            done < "$test_classes_file"
+
+      # ===== CLEANUP: rimuovi SEMPRE i .generated.java prodotti da Chat2UnitTest
+      # (altrimenti Gradle compila anche quelli e hai "duplicate class")
       while IFS= read -r cls; do
         cls="$(sanitize_line "$cls")"
         [[ -z "$cls" ]] && continue
-
-        local tf bak
         tf="$(fqn_to_test_path "$cls")"
-        if [[ -f "$tf" ]]; then
-          bak="${tf}.bak"
-          mv "$tf" "$bak"
-          backups["$tf"]="$bak"
-          echo "[BRANCH i] Moved old test file to backup: $bak"
-        fi
-      done < "$test_classes_file"
-
-      # Run Chat2UnitTest ONLY for this entry
-      echo "[BRANCH i] Running Chat2UnitTest (single entry)..."
-      java -jar "$CHAT2UNITTEST_JAR" "$single_json" \
-        -host "$CHAT2UNITTEST_HOST" \
-        -mdl "$CHAT2UNITTEST_MODEL" \
-        -tmp "$CHAT2UNITTEST_TEMP"
-
-      # =========================
-      # MERGE generated -> target
-      # (MUST happen BEFORE guard/gradle)
-      # =========================
-      local merge_failed=0
-      while IFS= read -r cls; do
-        cls="$(sanitize_line "$cls")"
-        [[ -z "$cls" ]] && continue
-        local tf
-        tf="$(fqn_to_test_path "$cls")"
-        if ! merge_generated_tests "$tf" "$tmp_tests_to_regen"; then
-          echo "[BRANCH i] Merge failed for $tf"
-          merge_failed=1
-        fi
+        rm -f "${tf%.java}.generated.java" 2>/dev/null || true
       done < "$test_classes_file"
 
       if [[ "$merge_failed" -eq 1 ]]; then
         echo "[BRANCH i] Merge failed -> restoring backups and skipping gradle for this attempt."
         for tf in "${!backups[@]}"; do
           local bak="${backups[$tf]}"
-          [[ -f "$bak" ]] && mv "$bak" "$tf"
+          [[ -f "$bak" ]] && cp -f "$bak" "$tf"
         done
         attempt=$((attempt+1))
         continue
@@ -801,66 +2016,101 @@ branch_modified() {
         echo "[BRANCH i] Regeneration incomplete -> restoring backups and skipping gradle for this attempt."
         for tf in "${!backups[@]}"; do
           local bak="${backups[$tf]}"
-          [[ -f "$bak" ]] && mv "$bak" "$tf"
+          [[ -f "$bak" ]] && cp -f "$bak" "$tf"
         done
         attempt=$((attempt+1))
         continue
       fi
 
       # =========================
-      # Guard: required test methods must exist after merge
+      # Guard: generic sanity checks AFTER merge
+      # - file exists + non-empty
+      # - package/class ok (già li controlli nell’altro guard)
+      # - at least one @Test
+      # - no duplicate method names (prevents "already defined")
+      # - (optional) test calls the modified production methods
       # =========================
-      local missing_methods=0
-      while IFS= read -r t; do
-        t="$(sanitize_line "$t")"
-        [[ -z "$t" ]] && continue
+      local bad=0
 
-        local cls="${t%.*}"       # es: utente.personale.TecnicoTest
-        local m="${t##*.}"        # es: testSetName
+      while IFS= read -r cls; do
+        cls="$(sanitize_line "$cls")"
+        [[ -z "$cls" ]] && continue
+
         local tf
         tf="$(fqn_to_test_path "$cls")"
 
-        if [[ ! -f "$tf" ]]; then
-          echo "[BRANCH i] Missing test file when checking methods: $tf"
-          missing_methods=1
+        if [[ ! -s "$tf" ]]; then
+          echo "[BRANCH i] Missing/empty merged test file: $tf"
+          bad=1
           continue
         fi
 
-        # metodo esiste?
-        if ! grep -qE "public[[:space:]]+void[[:space:]]+$m[[:space:]]*\(" "$tf"; then
-          echo "[BRANCH i] Missing required test method '$m' in: $tf"
-          missing_methods=1
-          continue
+        # almeno un @Test
+        if ! grep -qE '^[[:space:]]*@Test([[:space:]]|\(|$)' "$tf"; then
+          echo "[BRANCH i] No @Test methods found in: $tf"
+          bad=1
         fi
 
-        # @Test presente vicino al metodo
-        if ! awk -v meth="$m" '
-            {buf[NR]=$0}
-            /public[[:space:]]+void[[:space:]]+/{
-              if($0 ~ ("public[[:space:]]+void[[:space:]]+" meth "[[:space:]]*\\(")){
-                for(i=NR-6;i<=NR;i++){
-                  if(i>0 && buf[i] ~ /^[[:space:]]*@Test\b/){ found=1 }
-                }
-                if(found!=1){ exit 2 } else { exit 0 }
-              }
-            }
-            END{ exit 1 }
-          ' "$tf"; then
-          rc=$?
-          if [[ "$rc" -eq 2 ]]; then
-            echo "[BRANCH i] Method '$m' exists but is missing @Test near it in: $tf"
-          else
-            echo "[BRANCH i] Could not confirm @Test for '$m' in: $tf"
+        # niente duplicati sui nomi metodo (public void nome(...))
+        dups="$(grep -E '^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[[:space:]]+[A-Za-z0-9_]+\s*\(' "$tf" \
+          | sed -E 's/.*void[[:space:]]+([A-Za-z0-9_]+).*/\1/' \
+          | sort | uniq -d || true)"
+
+        if [[ -n "${dups:-}" ]]; then
+          echo "[BRANCH i] Duplicate method names in $tf:"
+          echo "$dups" | sed 's/^/  - /'
+          bad=1
+        fi
+
+      # =========================
+      # GUARD (regen-based):
+      # Valida SOLO i test che risultano effettivamente rigenerati in questo file:
+      # - ricava le basi da tutti i metodi "*_case1" presenti nel file di test
+      # - se non c'è nemmeno un _case1 => merge non ha inserito nulla => FAIL
+      # =========================
+      regen_bases="$(mktemp)"
+
+      # prende "base" da: public void <base>_case1(
+      grep -oE "public[[:space:]]+void[[:space:]]+[A-Za-z0-9_]+_case1[[:space:]]*\\(" "$tf" \
+        | sed -E 's/.*void[[:space:]]+([A-Za-z0-9_]+)_case1.*/\1/' \
+        | sort -u > "$regen_bases"
+
+      if [[ ! -s "$regen_bases" ]]; then
+        echo "[BRANCH i] No '*_case1' methods found after merge in: $tf"
+        bad=1
+      else
+        # opzionale: controllo robusto "base_case1 o base" (di solito basta base_case1)
+        while IFS= read -r base_method; do
+          base_method="$(sanitize_line "$base_method")"
+          [[ -z "$base_method" ]] && continue
+
+          if ! grep -qE "public[[:space:]]+void[[:space:]]+(${base_method}_case1|${base_method})[[:space:]]*\\(" "$tf"; then
+            echo "[BRANCH i] Missing regenerated test '${base_method}' (neither base nor _case1) in: $tf"
+            bad=1
           fi
-          missing_methods=1
-        fi
-      done < "$tmp_tests_to_regen"
+        done < "$regen_bases"
+      fi
 
-      if [[ "$missing_methods" -eq 1 ]]; then
-        echo "[BRANCH i] Missing required test methods -> restoring backups and retrying."
+      rm -f "$regen_bases"
+
+        # OPTIONAL: assicurati che nel test compaiano chiamate ai metodi modificati
+        # (non controlla i NOMI dei test, controlla che vengano chiamati i metodi prod)
+        for pm in "${methods_for_file[@]}"; do
+          pm="$(sanitize_line "$pm")"
+          [[ -z "$pm" ]] && continue
+          if ! grep -qE "\b${pm}[[:space:]]*\(" "$tf"; then
+            echo "[BRANCH i] No call to modified method '${pm}(' found in: $tf"
+            bad=1
+          fi
+        done
+
+      done < "$test_classes_file"
+
+      if [[ "$bad" -eq 1 ]]; then
+        echo "[BRANCH i] Guard failed -> restoring backups and retrying."
         for tf in "${!backups[@]}"; do
           bak="${backups[$tf]}"
-          [[ -f "$bak" ]] && mv "$bak" "$tf"
+          [[ -f "$bak" ]] && cp -f "$bak" "$tf"
         done
         attempt=$((attempt+1))
         continue
@@ -873,6 +2123,46 @@ branch_modified() {
       if ./gradlew :app:test --rerun-tasks "${gradle_args[@]}"; then
         echo "[BRANCH i] Entry $class_fqn succeeded on attempt $attempt."
 
+        # =========================
+        # UPDATE coverage-matrix.json: aggiungi i nuovi test *_caseN ereditando la coverage del base
+        # =========================
+        while IFS= read -r tcls; do
+          tcls="$(sanitize_line "$tcls")"
+          [[ -z "$tcls" ]] && continue
+          tf="$(fqn_to_test_path "$tcls")"
+          [[ -f "$tf" ]] || continue
+
+          # per ogni required base per questa classe, trova i case nel file e aggiungili in coverage
+          while IFS= read -r full; do
+            full="$(sanitize_line "$full")"
+            [[ -z "$full" ]] && continue
+            # full tipo: utente.UtenteTest.testSetName
+            base_method="${full##*.}"
+            base_key="$full"
+
+            # trova case presenti nel file
+            mapfile -t cases < <(grep -Eo "public[[:space:]]+void[[:space:]]+${base_method}_case[0-9]+[[:space:]]*\(" "$tf" \
+              | sed -E "s/.*void[[:space:]]+(${base_method}_case[0-9]+).*/\1/" | sort -u)
+
+            [[ "${#cases[@]}" -eq 0 ]] && continue
+
+            # coverage array del base (JSON)
+            base_arr="$(jq -c --arg k "$base_key" '.[$k] // empty' "$COVERAGE_MATRIX_JSON")"
+            [[ -z "$base_arr" ]] && continue
+
+            # aggiungi ciascun case come nuova chiave
+            for cm in "${cases[@]}"; do
+              new_key="${tcls}.${cm}"
+              tmp_cov="$(mktemp)"
+              jq --arg nk "$new_key" --argjson arr "$base_arr" '
+                . + {($nk): $arr}
+              ' "$COVERAGE_MATRIX_JSON" > "$tmp_cov" && mv "$tmp_cov" "$COVERAGE_MATRIX_JSON"
+            done
+
+          done < <(awk -v pref="${cls}." 'index($0,pref)==1 {print $0}' "$tmp_tests_to_regen")
+
+        done < "$test_classes_file"
+
         # Now prune old benchmark methods (this entry) and regenerate JMH for OWNER test class
         echo "[BRANCH i] Pruning old benchmark methods (this entry)..."
         java -cp "$AST_JAR" BenchmarkPruner "$tmp_tests_to_regen" "$BENCH_ROOT"
@@ -883,17 +2173,22 @@ branch_modified() {
           exit 1
         fi
 
-        # delete backups only on success
-        for tf in "${!backups[@]}"; do
-          local bak="${backups[$tf]}"
-          [[ -f "$bak" ]] && rm -f "$bak"
-        done
+        # delete pristine only on success
+        while IFS= read -r cls; do
+          cls="$(sanitize_line "$cls")"
+          [[ -z "$cls" ]] && continue
+          tf="$(fqn_to_test_path "$cls")"
+          rm -f "${tf}.pristine" 2>/dev/null || true
+        done < "$test_classes_file"
 
         break
       fi
 
       echo "[BRANCH i] Entry $class_fqn attempt $attempt failed."
       echo "[BRANCH i] Debug: showing merged test file(s) head (first 160 lines):"
+      echo "[BRANCH i] Debug: showing error line neighborhood (lines 45-80):"
+      sed -n '45,80p' "app/src/test/java/utente/personale/TecnicoTest.java" || true
+
       while IFS= read -r cls; do
         cls="$(sanitize_line "$cls")"
         [[ -z "$cls" ]] && continue
@@ -911,7 +2206,7 @@ branch_modified() {
       # restore backups after failed attempt
       for tf in "${!backups[@]}"; do
         local bak="${backups[$tf]}"
-        [[ -f "$bak" ]] && mv "$bak" "$tf"
+        [[ -f "$bak" ]] && cp -f "$bak" "$tf"
       done
 
       attempt=$((attempt+1))

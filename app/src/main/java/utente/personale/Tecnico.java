@@ -24,10 +24,7 @@ public class Tecnico {
         return code;
     }
 
-    public void setName(String name) {
-        System.out.println("ciaoff");
-        this.name = name;
-    }
+    public void setName(String name) { this.name = name;}
 
     public void setSurname(String surname) {
         this.surname = surname;
@@ -37,9 +34,7 @@ public class Tecnico {
         this.profession = profession;
     }
 
-    public void setCode(int code) {
-        this.code = code;
-    }
+    public void setCode(int code) {this.code = code;}
 
     private String name;
     private String surname;

@@ -32,6 +32,7 @@ tasks.test {
     // NON eseguirli come test
     exclude("**/JacocoCoverageListener*")
     exclude("**/JacocoCoverageRunListener*")
+    exclude ("**/CoverageSuiteTest.class")
 
     // Mostra System.out/System.err dei test (serve per vedere i tuoi [DEBUG])
     testLogging {

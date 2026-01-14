@@ -1,3 +1,4 @@
+banca.ContoBancario.prelievo
 utente.Utente.getName
-utente.Utente.setName
-utente.personale.Tecnico.setName
+utente.Utente.setSurname
+utente.personale.Amministratore.setDepartment

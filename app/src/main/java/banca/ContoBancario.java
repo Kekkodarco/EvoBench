@@ -8,6 +8,10 @@ public class ContoBancario {
         this.saldo = saldo_iniziale;
     }
 
+    public ContoBancario() {
+        this("default", 0);
+    }
+
     public String getId() {
         return id;
     }

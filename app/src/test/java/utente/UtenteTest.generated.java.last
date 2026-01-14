@@ -1,0 +1,40 @@
+package utente;
+
+import org.junit.Test;
+import static org.junit.Assert.*;
+
+public class UtenteTest {
+    @Test
+    public void testGetName() {
+        // Arrange
+        String name = "John";
+        String surname = "Doe";
+        String telephone = "+39 1234567890";
+        String address = "Via Roma, 10";
+        ContoBancario contoBancario = new ContoBancario();
+        Utente utente = new Utente(name, surname, telephone, address, contoBancario);
+
+        // Act
+        String result = utente.getName();
+
+        // Assert
+        assertEquals("John", result);
+    }
+
+    @Test
+    public void testSetSurname() {
+        // Arrange
+        String name = "John";
+        String surname = "Doe";
+        String telephone = "+39 1234567890";
+        String address = "Via Roma, 10";
+        ContoBancario contoBancario = new ContoBancario();
+        Utente utente = new Utente(name, surname, telephone, address, contoBancario);
+
+        // Act
+        utente.setSurname("Smith");
+
+        // Assert
+        assertEquals("Smith", utente.getSurname());
+    }
+}
