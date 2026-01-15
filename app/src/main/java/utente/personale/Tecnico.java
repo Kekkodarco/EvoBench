@@ -17,6 +17,7 @@ public class Tecnico {
     }
 
     public String getProfession() {
+        System.out.println("ccc");
         return profession;
     }
 

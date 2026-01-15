@@ -5,34 +5,15 @@ import static org.junit.Assert.*;
 
 public class TecnicoTest {
     @Test
-    public void testSetCode() {
-        // Satisfy the success condition implied by the code:
+    public void testGetProfession() {
+        // Arrange
+        String expected = "Teacher";
         Tecnico tecnico = new Tecnico("John", "Doe", "Teacher", 123456);
-        int initialCode = tecnico.getCode();
-        assertNotEquals(initialCode, 0);
 
-        // Test the true branch:
-        tecnico.setCode(0);
-        assertEquals(0, tecnico.getCode());
+        // Act
+        String actual = tecnico.getProfession();
 
-        // Test the false branch:
-        tecnico.setCode(123456);
-        assertNotEquals(123456, 0);
-    }
-
-    @Test
-    public void testSetName() {
-        // Satisfy the success condition implied by the code:
-        Tecnico tecnico = new Tecnico("John", "Doe", "Teacher", 123456);
-        String initialName = tecnico.getName();
-        assertNotNull(initialName);
-
-        // Test the true branch:
-        tecnico.setName(null);
-        assertNull(tecnico.getName());
-
-        // Test the false branch:
-        tecnico.setName("John");
-        assertNotEquals("John", null);
+        // Assert
+        assertEquals(expected, actual);
     }
 }

@@ -16,9 +16,7 @@ public class ContoBancario {
         return id;
     }
 
-    public int getSaldo() {
-        return saldo;
-    }
+    public int getSaldo() {return saldo;}
 
     public void setId(String id) {
         this.id = id;
@@ -34,7 +32,6 @@ public class ContoBancario {
 
 
     public int prelievo(int quota) {
-        System.out.println("Prelievo quota: " + quota);
         if (this.saldo < quota)
             return 0;
         else

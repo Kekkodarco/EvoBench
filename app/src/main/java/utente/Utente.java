@@ -30,9 +30,7 @@ public class Utente {
         return address;
     }
 
-    public ContoBancario getContoBancario() {
-        return contoBancario;
-    }
+    public ContoBancario getContoBancario() {return contoBancario;}
 
     public void setName(String name) { this.name = name;}
 

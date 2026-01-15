@@ -1,1 +1,1 @@
-banca.ContoBancario.prelievo
+utente.personale.Tecnico.getProfession

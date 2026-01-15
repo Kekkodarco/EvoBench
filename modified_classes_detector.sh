@@ -726,9 +726,16 @@ echo "===================================================="
           }
         }
 
-        # 2) else fallback to its own base (strip _caseN if any)
+        # 2) se NON matcha nessun required base, scarta il blocco
         if($target eq ""){
-          ($target = $old) =~ s/_case\d+$//;
+          # consenti solo se il nome base coincide già con un required base
+          my $base_old = $old; $base_old =~ s/_case\d+$//;
+
+          my $is_req = 0;
+          for my $b (@req){ if($b eq $base_old){ $is_req=1; last; } }
+
+          next unless $is_req;     # <-- QUI: drop totale
+          $target = $base_old;
         }
 
         my $n = ++$k{$target};
@@ -741,21 +748,54 @@ echo "===================================================="
       $_ = join("\n/*__TEST_BLOCK__*/\n", @blocks) . "\n";
     ' "$tmp_methods"
 
-    # Build regen_bases from tmp_methods (base = name without _caseN)
-    regen_bases="$(mktemp)"
-    grep -oE "void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(" "$tmp_methods" \
-      | sed -E 's/.*void[[:space:]]+([A-Za-z0-9_]+)[[:space:]]*\(.*/\1/' \
-      | sed -E 's/_case[0-9]+$//' \
-      | sort -u > "$regen_bases"
-
-    echo "[MERGE][DEBUG] regen_bases content:"
-    cat "$regen_bases" || true
-
     echo "================ DEBUG RENAME END =================="
     echo "[DBG] tmp_methods size AFTER rename: $(wc -c < "$tmp_methods") bytes"
     echo "[DBG] Methods AFTER rename:"
     perl -ne 'print "$.:\t$1\n" if(/public\s+void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" || true
     echo "===================================================="
+
+    # =========================
+    # tieni solo blocchi con base in req_bases
+    # =========================
+    # STEP 3 (cleanup spazzatura): tieni solo blocchi con base in req_bases
+    # FAIL-SAFE: se filtra tutto, lascia invariato
+    # =========================
+    REQBASES="$req_bases" perl -0777 -i -pe '
+      my $orig = $_;
+
+      my $reqfile = $ENV{REQBASES};
+      open my $fh, "<", $reqfile or die $!;
+      my %ok;
+      while(my $l=<$fh>){
+        $l =~ s/\r?\n$//;
+        next if $l eq "";
+        $ok{$l}=1;
+      }
+      close $fh;
+
+      # SPLIT COERENTE (come negli altri punti)
+      my @blocks = split(/\n\s*\/\*__TEST_BLOCK__\*\/\s*\n/s, $orig);
+
+      if(!@blocks){
+        $_ = $orig;
+      } else {
+        my @out;
+        for my $b (@blocks){
+          next if $b !~ /\bvoid\s+([A-Za-z0-9_]+)\s*\(/;
+          my $m=$1;
+          (my $base=$m) =~ s/_case\d+$//;
+          next unless exists $ok{$base};
+          push @out, $b;
+        }
+
+        if(!@out){
+          $_ = $orig;
+        } else {
+          # QUI è il punto giusto: ricostruisce tmp_methods con delimitatore standard
+          $_ = join("\n/*__TEST_BLOCK__*/\n", @out) . "\n";
+        }
+      }
+    ' "$tmp_methods"
 
         # --- CANONICAL RENUMBER (stable): per ogni base, garantisci case1..caseN in ordine ---
         perl -i -pe '
@@ -1093,62 +1133,13 @@ perl -pi -e 's/\r$//mg' "$test_file"
     ' "$test_file" > "$tmp_clean"
     mv "$tmp_clean" "$test_file"
 
-      # =========================
-      # FIX STRUCTURE (target): se un metodo precedente è rimasto aperto e arriva un nuovo @Test,
-      # chiudi automaticamente le graffe fino a tornare al livello della classe.
-      # Questo impedisce inserimenti "dentro" un metodo (come il tuo testSetCode()).
-      # =========================
-      local tmp_fix
-      tmp_fix="$(mktemp)"
-
-      awk '
-        BEGIN{depth=0}
-
-        function delta_braces(s,   t,o,c){
-          t=s; o=gsub(/\{/,"{",t)
-          t=s; c=gsub(/\}/,"}",t)
-          return o-c
-        }
-
-        {
-          line=$0
-
-          # Se compare un @Test mentre siamo dentro un metodo (depth > 1),
-          # chiudiamo fino a tornare al livello classe (depth==1).
-          if(line ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
-            while(depth > 1){
-              print "    }"
-              depth--
-            }
-          }
-
-          print line
-          depth += delta_braces(line)
-        }
-
-        END{
-          # Se il file finisce ancora dentro un metodo, chiudi fino a livello classe
-          while(depth > 1){
-            print "    }"
-            depth--
-          }
-        }
-      ' "$test_file" > "$tmp_fix" && mv "$tmp_fix" "$test_file"
-
       # Normalizza CRLF -> LF sul target
       perl -pi -e 's/\r$//mg' "$test_file"
 
     # 5) Inserisci i nuovi metodi prima della "}" che chiude la CLASSE
         # (cioè una "}" standalone dopo la quale ci sono solo righe vuote)
-        local tmp_out
-        tmp_out="$(mktemp)"
-
         # =========================
         # PRE-INSERT STRUCTURE FIX (robusto e unico)
-        # - normalizza CRLF
-        # - rimuove @Test orfani in coda
-        # - se compare un @Test mentre siamo dentro un metodo, chiude il metodo PRIMA dell'@Test
-        # - assicura che il file termini con una "}" standalone (chiusura classe)
         # =========================
         perl -pi -e 's/\r$//mg' "$test_file"
 
@@ -1167,8 +1158,6 @@ perl -pi -e 's/\r$//mg' "$test_file"
           {
             line=$0
 
-            # Se arriva un @Test mentre siamo dentro un metodo (depth>1),
-            # chiudi fino a tornare al livello classe (depth==1) PRIMA di stampare @Test.
             if(line ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
               while(depth > 1){
                 print "    }"
@@ -1181,7 +1170,6 @@ perl -pi -e 's/\r$//mg' "$test_file"
           }
 
           END{
-            # chiudi eventuali metodi lasciati aperti
             while(depth > 1){
               print "    }"
               depth--
@@ -1195,13 +1183,13 @@ perl -pi -e 's/\r$//mg' "$test_file"
           1 while s/\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[ \t]*\z/\n/s;
         ' "$test_file"
 
-        # Assicura che l\'ultima riga non-vuota sia "}"
+        # Assicura che l’ultima riga non-vuota sia "}"
         last_nonempty="$(grep -nve "^[[:space:]]*$" "$test_file" | tail -n 1 | cut -d: -f2-)"
         if ! echo "$last_nonempty" | grep -qE "^[[:space:]]*}[[:space:]]*$"; then
           echo "}" >> "$test_file"
         fi
 
-        # GUARD: l'ultima riga non-vuota DEVE essere una "}" standalone (chiusura classe)
+        # GUARD finale
         last_nonempty="$(grep -nve '^[[:space:]]*$' "$test_file" | tail -n 1 | cut -d: -f2-)"
         if ! echo "$last_nonempty" | grep -qE '^[[:space:]]*}[[:space:]]*$'; then
           echo "[MERGE][FATAL] Target test file does NOT end with a standalone '}' (class close). Refusing to insert."
@@ -1210,12 +1198,15 @@ perl -pi -e 's/\r$//mg' "$test_file"
         fi
 
         # =========================
-        # PRUNE TARGET by regen_bases (generic):
-        # remove any @Test method whose name starts with one of the bases we are about to insert
-        # (base, base_caseN, base_anything)
+        # PRUNE TARGET by req_bases (ANNOTATION-AWARE)
+        # Drops ANY annotated test-method (annotation stack) whose name starts with:
+        #   base
+        #   base_caseN
+        #   base_anything
+        # for bases in req_bases
         # =========================
         tmp_pruned_regen="$(mktemp)"
-        awk -v bases_file="$regen_bases" '
+        awk -v bases_file="$req_bases" '
           BEGIN{
             while((getline b < bases_file)>0){
               gsub(/\r/,"",b);
@@ -1223,56 +1214,74 @@ perl -pi -e 's/\r$//mg' "$test_file"
             }
             close(bases_file);
 
-            inBlock=0; buf=""; brace=0; started=0; name="";
+            inBlock=0; buf=""; depth=0; started=0; name=""; sawAnnot=0;
+          }
+
+          function brace_delta(s,   t,o,c){
+            t=s; o=gsub(/\{/,"{",t);
+            t=s; c=gsub(/\}/,"}",t);
+            return o-c;
+          }
+
+          function is_annot(line){
+            return (line ~ /^[[:space:]]*@/);
+          }
+
+          function is_sig(line){
+            return (line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/);
           }
 
           function extract_name(line,   t){
-            if(line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/){
-              t=line; sub(/.*void[[:space:]]+/,"",t); sub(/\(.*/,"",t); gsub(/[[:space:]]+/,"",t); return t;
-            }
-            return "";
+            t=line; sub(/.*void[[:space:]]+/,"",t); sub(/\(.*/,"",t); gsub(/[[:space:]]+/,"",t); return t;
           }
 
           function should_drop(n,   b){
-            for(b in bases){
+            for(b inBlock bases){
               if(n == b) return 1;
               if(index(n, b "_case")==1) return 1;
-              if(index(n, b "_")==1) return 1;  # <-- questa è la chiave per i tuoi suff/insuff ecc
+              if(index(n, b "_")==1) return 1;   # suffissi tipo _WhenX, _Empty, ecc.
             }
             return 0;
           }
 
           {
-            if(inBlock==0 && $0 ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/){
-              inBlock=1; buf=$0 "\n"; brace=0; started=0; name="";
+            line=$0;
+
+            # start buffering on first annotation line
+            if(inBlock==0 && is_annot(line)){
+              inBlock=1; buf=line "\n"; depth=0; started=0; name=""; sawAnnot=1;
               next;
             }
 
             if(inBlock==1){
-              buf = buf $0 "\n";
+              buf = buf line "\n";
 
-              if(name==""){
-                n = extract_name($0);
-                if(n!="") name=n;
+              if(name=="" && is_sig(line)){
+                name = extract_name(line);
               }
 
-              if(started==0 && $0 ~ /\{/) started=1;
-              if(started==1){
-                line=$0;
-                o=gsub(/\{/,"{",line); c=gsub(/\}/,"}",line);
-                brace += o; brace -= c;
+              d = brace_delta(line);
+              if(d != 0){ started=1; depth += d; }
 
-                if(brace==0){
-                  if(name=="" || !should_drop(name)) printf "%s", buf;
-                  inBlock=0; buf=""; brace=0; started=0; name="";
-                }
+              if(started && depth==0){
+                # end of method
+                if(name=="" || !should_drop(name)) printf "%s", buf;
+                inBlock=0; buf=""; depth=0; started=0; name=""; sawAnnot=0;
               }
               next;
             }
 
             print;
           }
+
+          END{
+            # flush if something remained (fallback safe)
+            if(inBlock==1) printf "%s", buf;
+          }
         ' "$test_file" > "$tmp_pruned_regen" && mv "$tmp_pruned_regen" "$test_file"
+
+        local tmp_out
+        tmp_out="$(mktemp)"
 
         awk -v addfile="$tmp_methods" '
           function count_braces(s,   t,o,c){
@@ -2226,6 +2235,12 @@ branch_modified() {
         | sed -E 's/.*void[[:space:]]+([A-Za-z0-9_]+)_case1.*/\1/' \
         | sort -u > "$regen_bases"
 
+      # req_bases_local: basi richieste da coverage per QUESTA test class
+      local req_bases_local
+      req_bases_local="$(mktemp)"
+      awk -v pref="${cls}." 'index($0,pref)==1 {print substr($0, length(pref)+1)}' \
+        "$tmp_tests_to_regen" | sed 's/\r$//' | sort -u > "$req_bases_local"
+
       if [[ ! -s "$regen_bases" ]]; then
         echo "[BRANCH i] No '*_case1' methods found after merge in: $tf"
         bad=1
@@ -2242,8 +2257,6 @@ branch_modified() {
         done < "$regen_bases"
       fi
 
-      rm -f "$regen_bases"
-
         # OPTIONAL: assicurati che nel test compaiano chiamate ai metodi modificati
         # (non controlla i NOMI dei test, controlla che vengano chiamati i metodi prod)
         for pm in "${methods_for_file[@]}"; do
@@ -2256,15 +2269,13 @@ branch_modified() {
         done
 
         # =========================
-        # CLEANUP: remove legacy @Test blocks that call modified prod methods
-        # but are NOT in req_bases nor regen_bases
-        # (prevents accumulating old generated tests like testPrelievoSuccess_case1)
+        # CLEANUP SPazzatura:
+        # rimuove @Test che chiamano metodi prod modificati (pm)
+        # ma NON sono whitelisted (req_bases U regen_bases)
         # =========================
-
-        # build whitelist = req_bases U regen_bases
         local whitelist
         whitelist="$(mktemp)"
-        cat "$req_bases" "$regen_bases" 2>/dev/null | sed 's/\r$//' | sort -u > "$whitelist"
+        cat "$req_bases_local" "$regen_bases" 2>/dev/null | sed 's/\r$//' | sort -u > "$whitelist"
 
         for pm in "${methods_for_file[@]}"; do
           pm="$(sanitize_line "$pm")"
@@ -2275,13 +2286,16 @@ branch_modified() {
             BEGIN{
               while((getline x < WL)>0){ gsub(/\r/,"",x); if(x!="") ok[x]=1 }
               close(WL)
-              in=0; buf=""; brace=0; started=0; name=""; keep=1; calls=0;
+              inBlock=0; buf=""; brace=0; started=0; name=""; keep=1; calls=0;
             }
 
             function is_test_anno(line){ return line ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b/ }
             function is_sig(line){ return line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/ }
             function extract_name(line, t){
               t=line; sub(/.*void[[:space:]]+/,"",t); sub(/\(.*/,"",t); gsub(/[[:space:]]+/,"",t); return t
+            }
+            function base_of(n){
+              gsub(/_case[0-9]+$/,"",n); return n
             }
             function brace_delta(s, t,o,c){
               t=s; o=gsub(/\{/,"{",t); t=s; c=gsub(/\}/,"}",t); return o-c
@@ -2290,39 +2304,41 @@ branch_modified() {
             {
               line=$0
 
-              if(!in && is_test_anno(line)){
-                in=1; buf=line "\n"; brace=0; started=0; name=""; keep=1; calls=0;
+              if(!inBlock && is_test_anno(line)){
+                inBlock=1; buf=line "\n"; brace=0; started=0; name=""; keep=1; calls=0;
                 next
               }
 
-              if(in){
+              if(inBlock){
                 buf = buf line "\n"
 
                 if(name=="" && is_sig(line)){
                   name = extract_name(line)
                 }
 
-                # detect call to modified prod method PM(
                 if(line ~ ("\\b" PM "[[:space:]]*\\(")) calls=1
 
                 d = brace_delta(line)
                 if(d != 0){ started=1; brace += d }
 
                 if(started && brace==0){
-                  # decision: drop if calls PM and name NOT in whitelist
-                  if(calls && !(name in ok)) keep=0
+                  b = base_of(name)
+                  # drop se chiama PM e la base NON è whitelisted
+                  if(calls && !(b inBlock ok)) keep=0
                   if(keep) printf "%s", buf
-                  in=0; buf=""; brace=0; started=0; name=""; keep=1; calls=0
+                  inBlock=0; buf=""; brace=0; started=0; name=""; keep=1; calls=0
                 }
                 next
               }
 
               print
             }
-          ' "$test_file" > "$tmp_cleanup" && mv "$tmp_cleanup" "$test_file"
+          ' "$tf" > "$tmp_cleanup" && mv "$tmp_cleanup" "$tf"
         done
 
         rm -f "$whitelist"
+        rm -f "$req_bases_local"
+        rm -f "$regen_bases"
 
       done < "$test_classes_file"
 
