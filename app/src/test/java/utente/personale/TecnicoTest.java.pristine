@@ -1,0 +1,52 @@
+package utente.personale;
+
+import static org.junit.Assert.*;
+
+import listener.JacocoCoverageListener;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+
+public class TecnicoTest {
+
+    @Before
+public void setUp() {
+this.tecnico = new Tecnico("John", "Doe", "Teacher", 1234);
+    }
+private Tecnico tecnico;
+    @Test
+public void testGetName() {
+Tecnico tecnico = new Tecnico("John", "Doe", "Engineer", 1);
+assertEquals("John", tecnico.getName());
+    }
+
+    @Test
+public void testGetSurname() {
+Tecnico tecnico = new Tecnico("John", "Doe", "Engineer", 1);
+assertEquals("Doe", tecnico.getSurname());
+    }
+
+    @Test
+public void testSetSurname() {
+Tecnico tecnico = new Tecnico("John", "Doe", "Engineer", 1);
+tecnico.setSurname("Smith");
+assertEquals("Smith", tecnico.getSurname());
+    }
+
+
+    @Test
+public void testSetCode() {
+Tecnico tecnico = new Tecnico("John", "Doe", "Engineer", 1);
+tecnico.setCode(2);
+assertEquals(2, tecnico.getCode());
+    }
+
+    @Test
+public void testSetName() {
+Tecnico tecnico = new Tecnico("John", "Doe", "Engineer",1);
+tecnico.setName("Jane");
+assertEquals("Jane", tecnico.getName());
+    }
+
+
+}
