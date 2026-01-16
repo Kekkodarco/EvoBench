@@ -2,6 +2,10 @@ package utente.personale;
 
 import static org.junit.Assert.*;
 
+
+
+
+
 import listener.JacocoCoverageListener;
 import org.junit.Before;
 import org.junit.Rule;
@@ -47,6 +51,5 @@ Tecnico tecnico = new Tecnico("John", "Doe", "Engineer",1);
 tecnico.setName("Jane");
 assertEquals("Jane", tecnico.getName());
     }
-
 
 }
