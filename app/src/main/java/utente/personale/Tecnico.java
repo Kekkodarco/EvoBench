@@ -18,9 +18,7 @@ public class Tecnico {
 
     public String getProfession() {return profession;}
 
-    public int getCode() {
-        return code;
-    }
+    public int getCode() {return code;}
 
     public void setName(String name) {this.name = name;}
 
