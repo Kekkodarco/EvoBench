@@ -16,16 +16,13 @@ public class Tecnico {
         return surname;
     }
 
-    public String getProfession() {
-        System.out.println("ccc");
-        return profession;
-    }
+    public String getProfession() {return profession;}
 
     public int getCode() {
         return code;
     }
 
-    public void setName(String name) { this.name = name;}
+    public void setName(String name) {this.name = name;}
 
     public void setSurname(String surname) {
         this.surname = surname;
