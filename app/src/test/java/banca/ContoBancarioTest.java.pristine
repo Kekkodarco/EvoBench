@@ -5,15 +5,11 @@ import static org.junit.Assert.*;
 
 
 
-
-
-
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.Before;
-import listener.BaseCoverageTest;
 
-public class ContoBancarioTest  extends BaseCoverageTest {
+public class ContoBancarioTest {
 
     @Before
 public void setUp() {
@@ -154,42 +150,6 @@ int quota = 100;
 assertEquals(0, c.prelievo(quota));
 assertEquals(50, c.getSaldo());
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    @Test
-public void testHasSaldoPositivo_case1() {
-        // Arrange
-ContoBancario c = new ContoBancario("123456", 0);
-
-        // Act
-boolean result = c.hasSaldoPositivo();
-
-        // Assert
-assertFalse(result);
-    }
-
-
 
 
 

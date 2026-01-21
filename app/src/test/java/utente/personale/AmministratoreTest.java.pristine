@@ -1,0 +1,150 @@
+package utente.personale;
+
+import static org.junit.Assert.*;
+
+
+
+import listener.BaseCoverageTest;
+import listener.JacocoCoverageListener;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+
+public class AmministratoreTest extends BaseCoverageTest{
+
+    @Test
+public void testGetName() {
+Amministratore amministratore = new Amministratore("John", "Doe", "HR");
+assertEquals("John", amministratore.getName());
+    }
+
+    @Test
+public void testGetSurname() {
+Amministratore amministratore = new Amministratore("John", "Doe", "HR");
+assertEquals("Doe", amministratore.getSurname());
+    }
+
+    @Test
+public void testGetDepartment() {
+Amministratore amministratore = new Amministratore("John", "Doe", "HR");
+assertEquals("HR", amministratore.getDepartment());
+    }
+
+    @Test
+public void testSetName() {
+Amministratore amministratore = new Amministratore("John", "Doe", "HR");
+amministratore.setName("Jane");
+assertEquals("Jane", amministratore.getName());
+    }
+
+    @Test
+public void testSetSurname() {
+Amministratore amministratore = new Amministratore("John", "Doe", "HR");
+amministratore.setSurname("Foe");
+assertEquals("Foe", amministratore.getSurname());
+    }
+
+
+
+
+
+
+
+
+
+
+
+    @Test
+public void testSetDepartment_case1() {
+        // Arrange
+String name = "John";
+String surname = "Doe";
+String department = "IT";
+Amministratore amministratore = new Amministratore(name, surname, department);
+
+        // Act
+amministratore.setDepartment("Marketing");
+
+        // Assert
+assertEquals("Marketing", amministratore.getDepartment());
+    }
+    @Test
+public void testSetDepartment_case2() {
+        // Arrange
+String name = "John";
+String surname = "Doe";
+String department = "IT";
+Amministratore amministratore = new Amministratore(name, surname, department);
+
+        // Act
+amministratore.setDepartment(null);
+
+        // Assert
+assertNull(amministratore.getDepartment());
+    }
+    @Test
+public void testSetDepartment_case3() {
+        // Arrange
+String name = "John";
+String surname = "Doe";
+String department = "IT";
+Amministratore amministratore = new Amministratore(name, surname, department);
+
+        // Act
+amministratore.setDepartment("");
+
+        // Assert
+assertEquals("", amministratore.getDepartment());
+    }
+
+
+@Test
+public void testGetDepartment_NullInput_case1() {
+        // Arrange
+Amministratore amministratore = new Amministratore("John", "Doe", null);
+
+        // Act
+String department = amministratore.getDepartment();
+
+        // Assert
+assertNull(department);
+    }
+    @Test
+public void testGetDepartment_ValidInput_case1() {
+        // Arrange
+Amministratore amministratore = new Amministratore("John", "Doe", "IT");
+
+        // Act
+String department = amministratore.getDepartment();
+
+        // Assert
+assertEquals("IT", department);
+    }
+    @Test
+public void testSetDepartment_NullInput_case1() {
+        // Arrange
+Amministratore amministratore = new Amministratore("John", "Doe", null);
+
+        // Act
+amministratore.setDepartment(null);
+
+        // Assert
+assertNull(amministratore.getDepartment());
+    }
+    @Test
+public void testSetDepartment_ValidInput_case1() {
+        // Arrange
+Amministratore amministratore = new Amministratore("John", "Doe", "IT");
+
+        // Act
+amministratore.setDepartment("HR");
+
+        // Assert
+assertEquals("HR", amministratore.getDepartment());
+    }
+
+
+
+}

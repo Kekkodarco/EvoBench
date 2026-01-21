@@ -8,13 +8,9 @@ public class Tecnico {
         this.code = code;
     }
 
-    public String getName() {
-        return name;
-    }
+    public String getName() {return name;}
 
-    public String getSurname() {
-        return surname;
-    }
+    public String getSurname() {return surname;}
 
     public String getProfession() {return profession;}
 

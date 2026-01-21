@@ -4,8 +4,9 @@ import static org.junit.Assert.*;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.Before;
+import listener.BaseCoverageTest;
 
-public class ContoBancarioTest {
+public class ContoBancarioTest extends BaseCoverageTest {
 
     @Before
     public void setUp() {
@@ -128,5 +129,109 @@ public class ContoBancarioTest {
         int quota = 100;
         assertEquals(0, c.prelievo(quota));
         assertEquals(50, c.getSaldo());
+    }
+
+    @Test
+    public void testHasSaldoPositivo_case1() {
+        // Arrange
+        ContoBancario c = new ContoBancario("123456", 0);
+        // Act
+        boolean result = c.hasSaldoPositivo();
+        // Assert
+        assertFalse(result);
+    }
+
+    @org.openjdk.jmh.annotations.State(org.openjdk.jmh.annotations.Scope.Thread)
+    public static class _Benchmark extends listener.BaseCoverageTest._Benchmark {
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_prelievo_saldoNegativo() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::prelievo_saldoNegativo, this.description("prelievo_saldoNegativo"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_prelievo_saldoSufficiente() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::prelievo_saldoSufficiente, this.description("prelievo_saldoSufficiente"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_prelievo_saldoNegativoSufficiente() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::prelievo_saldoNegativoSufficiente, this.description("prelievo_saldoNegativoSufficiente"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testPrelievo_insufficientBalance_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testPrelievo_insufficientBalance_case1, this.description("testPrelievo_insufficientBalance_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testPrelievo_sufficientBalance_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testPrelievo_sufficientBalance_case1, this.description("testPrelievo_sufficientBalance_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_prelievo_sufficientBalance_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::prelievo_sufficientBalance_case1, this.description("prelievo_sufficientBalance_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_prelievo_insufficientBalance_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::prelievo_insufficientBalance_case1, this.description("prelievo_insufficientBalance_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testPrelievoSuccess_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testPrelievoSuccess_case1, this.description("testPrelievoSuccess_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testPrelievoFailure_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testPrelievoFailure_case1, this.description("testPrelievoFailure_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testPrelievo_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testPrelievo_case1, this.description("testPrelievo_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testPrelievoWithInsufficientBalance_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testPrelievoWithInsufficientBalance_case1, this.description("testPrelievoWithInsufficientBalance_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testHasSaldoPositivo_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testHasSaldoPositivo_case1, this.description("testHasSaldoPositivo_case1"));
+        }
+
+        @java.lang.Override
+        public void before() throws java.lang.Throwable {
+            super.before();
+            this.implementation().setUp();
+        }
+
+        private ContoBancarioTest implementation;
+
+        @java.lang.Override
+        public void createImplementation() throws java.lang.Throwable {
+            this.implementation = new ContoBancarioTest();
+        }
+
+        @java.lang.Override
+        public ContoBancarioTest implementation() {
+            return this.implementation;
+        }
     }
 }

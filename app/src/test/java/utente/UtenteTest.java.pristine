@@ -1,15 +1,16 @@
 package utente;
 
 import static org.junit.Assert.*;
+
 import banca.ContoBancario;
 import listener.JacocoCoverageListener;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mockito;
-import listener.BaseCoverageTest;
+import utente.personale.Amministratore;
 
-public class UtenteTest extends BaseCoverageTest {
+public class UtenteTest {
 
     private Utente utente;
 
@@ -17,6 +18,29 @@ public class UtenteTest extends BaseCoverageTest {
     public void setUp() {
         ContoBancario mockContoBancario = Mockito.mock(ContoBancario.class);
         utente = new Utente("John", "Doe", "123", "via mazzini", mockContoBancario);
+    }
+
+    @Test
+    public void testGetSurname() {
+        assertEquals("Doe", utente.getSurname());
+    }
+
+    @Test
+    public void testSetSurname() {
+        // Arrange
+        Utente utente = new Utente(
+                "John",
+                "Smith",
+                "1234567890",
+                "Main Street 123",
+                null
+        );
+
+        // Act
+        utente.setSurname("Doe");
+
+        // Assert
+        assertEquals("Doe", utente.getSurname());
     }
 
     @Test
@@ -43,29 +67,17 @@ public class UtenteTest extends BaseCoverageTest {
         String address = "Via Roma, 10";
         ContoBancario contoBancario = new ContoBancario();
         Utente utente = new Utente(name, surname, telephone, address, contoBancario);
+
         // Act
         String result = utente.getName();
+
         // Assert
         assertEquals("John", result);
     }
 
-    @Test
-    public void testGetSurname_case1() {
-        // Arrange
-        Utente utente = new Utente("John", "Doe", "1234567890", "Somewhere", null);
-        // Act
-        String surname = utente.getSurname();
-        // Assert
-        assertEquals("Doe", surname);
-    }
 
-    @Test
-    public void testSetSurname_case1() {
-        // Arrange
-        Utente utente = new Utente("John", "Doe", "1234567890", "Somewhere", null);
-        // Act
-        utente.setSurname("Smith");
-        // Assert
-        assertEquals("Smith", utente.getSurname());
-    }
+
+
+
+
 }
