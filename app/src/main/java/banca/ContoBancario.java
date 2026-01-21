@@ -3,6 +3,9 @@ package banca;
 import utente.Utente;
 
 public class ContoBancario {
+    private String id;
+    private int saldo;
+
     public ContoBancario(String idz, int saldo_iniziale) {
         this.id = idz;
         this.saldo = saldo_iniziale;
@@ -38,8 +41,5 @@ public class ContoBancario {
             this.saldo -= quota;
         return 1;
     }
-
-    private String id;
-    private int saldo;
 
 }
