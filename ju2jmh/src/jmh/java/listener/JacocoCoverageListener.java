@@ -22,7 +22,7 @@ public class JacocoCoverageListener extends TestWatcher {
 
     private static final String JACOCO_MBEAN_NAME = "org.jacoco:type=Runtime";
 
-    private static final String COVERAGE_MATRIX_FILE = "coverage-matrix.json";
+    private static final String COVERAGE_MATRIX_FILE = "app/coverage-matrix.json";
 
     @Override
     protected void succeeded(Description description) {
