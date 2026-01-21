@@ -51,7 +51,6 @@ public class JacocoCoverageListener extends TestWatcher {
             reader.setSessionInfoVisitor(sessionInfoStore);
             reader.read();
 
-            System.out.println("Covered methods for test: " + description.getMethodName());
 
             // Analyze the covered classes to determine methods
             CoverageBuilder coverageBuilder = new CoverageBuilder();
@@ -66,7 +65,6 @@ public class JacocoCoverageListener extends TestWatcher {
             for (ExecutionData data : executionDataStore.getContents()) {
                 if (data.hasHits()) {
                     String className = data.getName().replace("/", ".");
-                    System.out.println("Class: " + className);
 
                     // Analyze the corresponding .class file
                     File classFile = new File(classesDir, data.getName() + ".class");
@@ -82,7 +80,6 @@ public class JacocoCoverageListener extends TestWatcher {
                     for (String method : coveredMethods) {
                         if(method.equals("<init>"))
                             method = getSimpleClassName(className);
-                        System.out.println("Method covered: " + method);
                         fullyQualifiedCurrentMethods.add(className+"."+method);
                         coveredMethodsFullyQualified.add(className+"."+method);
                     }
