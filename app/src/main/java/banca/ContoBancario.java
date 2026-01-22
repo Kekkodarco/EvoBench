@@ -43,4 +43,8 @@ public class ContoBancario {
         return 1;
     }
 
+    public boolean hasSaldoPositivo() {
+        return saldo > 0;
+    }
+
 }
