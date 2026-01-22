@@ -42,5 +42,8 @@ public class ContoBancario {
             this.saldo -= quota;
         return 1;
     }
+    public boolean hasSaldoPositivo() {
+        return saldo > 0;
+    }
 
 }
