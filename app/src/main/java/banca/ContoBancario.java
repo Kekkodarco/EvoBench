@@ -35,15 +35,20 @@ public class ContoBancario {
 
 
     public int prelievo(int quota) {
-        System.out.println("Prelievo quota:" + quota);
+        System.out.println("Prelievo della quota:" + quota);
         if (this.saldo < quota)
             return 0;
         else
             this.saldo -= quota;
         return 1;
     }
-    public boolean hasSaldoPositivo() {
-        return saldo > 0;
-    }
 
+
+    public boolean azzeraSaldoSeNegativo() {
+        if (this.saldo < 0) {
+            this.saldo = 0;
+            return true;
+        }
+        return false;
+    }
 }
