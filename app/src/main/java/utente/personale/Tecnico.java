@@ -1,6 +1,12 @@
 package utente.personale;
 
 public class Tecnico {
+
+    private String name;
+    private String surname;
+    private String profession;
+    private int code;
+
     public Tecnico(String name, String surname, String profession, int code) {
         this.name = name;
         this.surname = surname;
@@ -26,10 +32,7 @@ public class Tecnico {
         this.profession = profession;
     }
 
-    public void setCode(int code) {this.code = code;}
-
-    private String name;
-    private String surname;
-    private String profession;
-    private int code;
+    public void setCode(int code) {
+        System.out.println("ddd");
+        this.code = code;}
 }
