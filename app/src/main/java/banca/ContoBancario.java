@@ -26,6 +26,8 @@ public class ContoBancario {
     }
 
     public void setSaldo(int saldo) {
+
+        System.out.println("Saldo: " + saldo);
         this.saldo = saldo;
     }
 
