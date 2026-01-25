@@ -37,7 +37,7 @@ public class ContoBancario {
 
 
     public int prelievo(int quota) {
-        System.out.println("Prelievo: " + quota);
+        System.out.println("Prelievo: dedd");
         if (this.saldo < quota)
             return 0;
         else
