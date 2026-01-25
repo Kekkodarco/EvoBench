@@ -46,6 +46,7 @@ public class ContoBancario {
 
 
     public boolean azzeraSaldoSeNegativo() {
+        System.out.println("Azzera saldo negativo");
         if (this.saldo < 0) {
             this.saldo = 0;
             return true;
