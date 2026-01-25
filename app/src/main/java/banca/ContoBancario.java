@@ -37,6 +37,7 @@ public class ContoBancario {
 
 
     public int prelievo(int quota) {
+        System.out.println("Prelievo: " + quota);
         if (this.saldo < quota)
             return 0;
         else
@@ -46,7 +47,6 @@ public class ContoBancario {
 
 
     public boolean azzeraSaldoSeNegativo() {
-        System.out.println("Azzera saldo negativo");
         if (this.saldo < 0) {
             this.saldo = 0;
             return true;
