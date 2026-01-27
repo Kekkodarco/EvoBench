@@ -35,37 +35,13 @@ public class UtenteTest extends BaseCoverageTest {
     }
 
     @Test
-    public void testGetName() {
+    public void testGetName_case1() {
         // Arrange
-        String name = "John";
-        String surname = "Doe";
-        String telephone = "+39 1234567890";
-        String address = "Via Roma, 10";
-        ContoBancario contoBancario = new ContoBancario();
-        Utente utente = new Utente(name, surname, telephone, address, contoBancario);
+        String expected = "John Doe";
+        Utente utente = new Utente(expected, "Doe", "555-1234", "123 Main St.", null);
         // Act
-        String result = utente.getName();
+        String actual = utente.getName();
         // Assert
-        assertEquals("John", result);
-    }
-
-    @Test
-    public void testGetSurname_case1() {
-        // Arrange
-        Utente utente = new Utente("John", "Doe", "1234567890", "Somewhere", null);
-        // Act
-        String surname = utente.getSurname();
-        // Assert
-        assertEquals("Doe", surname);
-    }
-
-    @Test
-    public void testSetSurname_case1() {
-        // Arrange
-        Utente utente = new Utente("John", "Doe", "1234567890", "Somewhere", null);
-        // Act
-        utente.setSurname("Smith");
-        // Assert
-        assertEquals("Smith", utente.getSurname());
+        assertEquals("getName() should return the name", expected, actual);
     }
 }

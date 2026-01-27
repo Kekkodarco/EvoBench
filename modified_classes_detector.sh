@@ -15,7 +15,7 @@ CHAT2UNITTEST_HOST="https://uncourtierlike-louvered-katelin.ngrok-free.dev/v1/ch
 CHAT2UNITTEST_MODEL="codellama-7b-instruct-hf"
 CHAT2UNITTEST_TEMP="0.4"
 #numero massimo tentativi generazione test
-MAX_CHAT2UNITTEST_ATTEMPTS="${MAX_CHAT2UNITTEST_ATTEMPTS:-7}"
+MAX_CHAT2UNITTEST_ATTEMPTS="${MAX_CHAT2UNITTEST_ATTEMPTS:-10}"
 
 MODIFIED_METHODS_FILE="modified_methods.txt"
 ADDED_METHODS_FILE="added_methods.txt"
@@ -35,11 +35,19 @@ JU2JMH_OUT_DIR="./ju2jmh/src/jmh/java"
 APP_TEST_SRC_DIR="./app/src/test/java"
 APP_TEST_CLASSES_DIR="./app/build/classes/java/test"
 
+#AMBER
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+AMBER_JAR="$ROOT_DIR/libs/jmh-core-1.37-all.jar"    # metti qui il jar AMBER
+AMBER_MODEL="${AMBER_MODEL:-oscnn}"        # oscnn | fcn | rocket
+AMBER_HOST="${AMBER_HOST:-localhost}"
+AMBER_PORT="${AMBER_PORT:-5001}"
+AMBER_RESULTS_DIR="${AMBER_RESULTS_DIR:-amber-results}"
+
 # switch per step futuri (LLM/bench)
 RUN_CHAT2UNITTEST="${RUN_CHAT2UNITTEST:-1}"
 RUN_JU2JMH="${RUN_JU2JMH:-0}"
-RUN_AMBER="${RUN_AMBER:-0}"
-
+#RUN_AMBER="${RUN_AMBER:-0}"
+RUN_AMBER=0
 # ===================== Utils ==================================================
 sep(){ printf '%*s\n' 90 '' | tr ' ' '-'; }
 
@@ -47,6 +55,41 @@ sanitize_line() {
   local s="$1"
   s="${s%$'\r'}"
   printf "%s" "$(echo -n "$s" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+}
+
+# Normalizza un base richiesto in forma coerente coi metodi @Test generati.
+# Esempi:
+#  - prelievo_saldoNegativo -> testPrelievo_saldoNegativo
+#  - prelievo              -> testPrelievo
+#  - testGetName           -> testGetName (unchanged)
+normalize_required_base() {
+  local b="$1"
+  b="$(sanitize_line "$b")"
+  echo "$b"
+}
+
+# Dato un base "getSaldo" -> "testGetSaldo"
+# Dato "prelievo_saldoNegativo" -> "testPrelievo_saldoNegativo"
+junit_variant_of_base() {
+  local b="$1"
+  b="$(sanitize_line "$b")"
+  [[ -z "$b" ]] && { echo ""; return; }
+
+  # capitalizza solo il primo carattere, non tocca underscore/parte restante
+  local cap="${b^}"
+  echo "test${cap}"
+}
+
+snapshot_bench() {
+  local tag="$1"
+  echo "----- [SNAPSHOT BENCH] $tag -----"
+  if [[ -d "$JU2JMH_OUT_DIR" ]]; then
+    find "$JU2JMH_OUT_DIR" -type f -name "*.java" | sort | sed 's/^/  /' | head -n 200
+    echo "[SNAPSHOT BENCH] count=$(find "$JU2JMH_OUT_DIR" -type f -name "*.java" | wc -l | tr -d ' ')"
+  else
+    echo "[SNAPSHOT BENCH] dir missing: $JU2JMH_OUT_DIR"
+  fi
+  echo "---------------------------------"
 }
 
 fqn_to_test_path() {
@@ -117,6 +160,69 @@ build_required_tests_for_methods() {
   echo "$out"
 }
 
+amber_run_for_owner_testclass() {
+  local owner_test_class_fqn="$1"   # es: utente.personale.TecnicoTest
+  local kind="$2"                  # modified|added
+  local prod_class_fqn="$3"        # es: utente.personale.Tecnico
+
+  sep
+  echo "[AMBER] Running for owner test class: $owner_test_class_fqn (kind=$kind, prod=$prod_class_fqn)"
+
+  # 1) prereq jar
+  if [[ ! -f "$AMBER_JAR" ]]; then
+    echo "[AMBER][FATAL] Missing AMBER jar at: $AMBER_JAR"
+    echo "[AMBER] Put jmh-core-1.37-all.jar under libs/ and set AMBER_JAR accordingly."
+    return 1
+  fi
+
+  # 2) locate ju2jmh jmhJar output
+  local jmh_jar
+  jmh_jar="$(ls -1t ju2jmh/build/libs/*-jmh.jar 2>/dev/null | head -n 1 || true)"
+  if [[ -z "$jmh_jar" ]]; then
+    echo "[AMBER][FATAL] Cannot find ju2jmh/build/libs/*-jmh.jar. Did :ju2jmh:jmhJar run?"
+    return 1
+  fi
+  echo "[AMBER] Using jmh jar: $jmh_jar"
+
+  # 3) results path (storico)
+  local sha ts outdir outfile
+  sha="$(git rev-parse --short HEAD 2>/dev/null || echo "no-git")"
+  ts="$(date +%Y%m%d_%H%M%S)"
+  outdir="$AMBER_RESULTS_DIR/$prod_class_fqn/$owner_test_class_fqn"
+  mkdir -p "$outdir"
+
+  outfile="$outdir/${kind}_${sha}_${ts}.json"
+
+  # 4) include filter: run only benchmarks generated for that test class
+  # ju2jmh di solito genera classi benchmark correlate al test class;
+  # filtro “safe” per nome: include la simple name del test class
+  local simple="${owner_test_class_fqn##*.}"
+  local include_pat="${simple}"
+
+  echo "[AMBER] Output JSON: $outfile"
+  echo "[AMBER] Model: $AMBER_MODEL  Service: $AMBER_HOST:$AMBER_PORT  Include: $include_pat"
+
+  # 5) run AMBER(JMH Main)
+  # -rf json -rff file
+  # -hmodel / -host / -hport = opzioni AMBER (come README)
+  # -i include pattern = filtra benchmark
+  java -cp "$AMBER_JAR:$jmh_jar" org.openjdk.jmh.Main \
+      -rf json -rff "$outfile" \
+      -hmodel "$AMBER_MODEL" -host "$AMBER_HOST" -hport "$AMBER_PORT" \
+      "$include_pat"
+
+  rc=$?
+  if [[ $rc -ne 0 ]]; then
+    echo "[AMBER][FATAL] AMBER run failed (rc=$rc)."
+    return $rc
+  fi
+
+  echo "[AMBER] OK -> saved: $outfile"
+
+  # (optional) aggiorna latest/prev per confronto “ultimo vs penultimo”
+  ln -sf "$(basename "$outfile")" "$outdir/latest.json" 2>/dev/null || cp -f "$outfile" "$outdir/latest.json"
+}
+
 generate_jmh_for_testclass() {
   local test_class_fqn="$1"   # es: utente.UtenteTest
 
@@ -145,31 +251,85 @@ generate_jmh_for_testclass() {
 
   echo "[JMH] Generating benchmark for: $test_class_fqn"
 
-  local tmp_classes_file
-  tmp_classes_file="$(mktemp)"
-  : > "$tmp_classes_file"
-  echo "$test_class_fqn" >> "$tmp_classes_file"
+    local tmp_out
+    tmp_out="$(mktemp -d)"
 
-  echo "[JMH] class-names-file content:"
-  cat "$tmp_classes_file"
+    echo "[JMH][DBG] OUT before convert count = $(find "$JU2JMH_OUT_DIR" -type f -name "*.java" | wc -l)"
 
-  if ! java -jar "$JU2JMH_CONVERTER_JAR" \
-      "$APP_TEST_SRC_DIR/" \
-      "$APP_TEST_CLASSES_DIR/" \
-      "$JU2JMH_OUT_DIR/" \
-      --class-names-file="$tmp_classes_file"; then
-    echo "[JMH] Converter failed for $test_class_fqn"
-    rm -f "$tmp_classes_file" 2>/dev/null || true
-    return 1
-  fi
+    # --- per-class class list (evita problemi della lista globale) ---
+    local one_class_file
+    one_class_file="$(mktemp)"
+    printf "%s\n" "$test_class_fqn" > "$one_class_file"
 
-  rm -f "$tmp_classes_file" 2>/dev/null || true
+    if ! java -jar "$JU2JMH_CONVERTER_JAR" \
+        "$APP_TEST_SRC_DIR/" \
+        "$APP_TEST_CLASSES_DIR/" \
+        "$tmp_out/" \
+        --class-names-file="$one_class_file"; then
+      echo "[JMH] Converter failed for class: $test_class_fqn"
+      rm -f "$one_class_file" 2>/dev/null || true
+      rm -rf "$tmp_out" 2>/dev/null || true
+      return 1
+    fi
+
+    rm -f "$one_class_file" 2>/dev/null || true
+    echo "[JMH][DBG] OUT after  convert count = $(find "$JU2JMH_OUT_DIR" -type f -name "*.java" | wc -l)"
+    echo "[JMH][DBG] TMP produced count      = $(find "$tmp_out" -type f -name "*.java" | wc -l)"
+    if [[ "$(find "$tmp_out" -type f -name "*.java" | wc -l)" -eq 0 ]]; then
+        echo "[JMH][ERROR] Converter produced 0 java files in tmp_out for $test_class_fqn"
+        rm -rf "$tmp_out" 2>/dev/null || true
+        return 1
+      fi
+
+        # --- NEW: merge generated sources into real out dir (overwrite only same files) ---
+        # --- NEW: merge ONLY current class into real out dir (avoid overwriting other classes) ---
+        mkdir -p "$JU2JMH_OUT_DIR"
+
+        local rel
+        rel="${test_class_fqn//.//}.java"
+
+        local src_java
+        src_java="$tmp_out/$rel"
+
+        local dst_java
+        dst_java="$JU2JMH_OUT_DIR/$rel"
+
+        if [[ ! -f "$src_java" ]]; then
+          echo "[JMH][ERROR] Converter did not produce expected file for $test_class_fqn: $src_java"
+          rm -rf "$tmp_out" 2>/dev/null || true
+          return 1
+        fi
+
+        mkdir -p "$(dirname "$dst_java")"
+        cp -f "$src_java" "$dst_java"
+        echo "[JMH][DBG] Copied only: $rel"
+
+
+        # =========================
+        # HARD CHECK: benchmark MUST exist
+        # =========================
+        local bench_java
+        bench_java="$JU2JMH_OUT_DIR/${test_class_fqn//.//}.java"
+
+        if [[ ! -f "$bench_java" ]]; then
+          echo "[JMH][ERROR] Expected JMH source not found: $bench_java"
+          return 1
+        fi
+
+        if ! grep -q "class _Benchmark" "$bench_java" || ! grep -q "benchmark_" "$bench_java"; then
+          echo "[JMH][ERROR] Conversion produced NO benchmarks for: $test_class_fqn"
+          echo "[JMH][ERROR] Dumping first 250 lines of generated file:"
+          nl -ba "$bench_java" | sed -n '1,250p'
+          return 1
+        fi
 
   # verifica compilazione modulo JMH
-  if ! ./gradlew :ju2jmh:jmhJar --rerun-tasks; then
+  snapshot_bench "BEFORE :ju2jmh:jmhJar (inside generate_jmh_for_testclass)"
+  if ! ./gradlew :ju2jmh:jmhJar; then
     echo "[JMH] jmhJar failed after conversion for $test_class_fqn"
     return 1
   fi
+  snapshot_bench "AFTER  :ju2jmh:jmhJar (inside generate_jmh_for_testclass)"
 
   echo "[JMH] OK: benchmark generated and jmhJar built for $test_class_fqn"
   return 0
@@ -906,38 +1066,41 @@ fi
     echo "[DBG] req_bases (base-collapsed):"
     nl -ba "$req_bases"
 
+    # ============================
+    # NORMALIZE req_bases (SAFE)
+    # ============================
+    local req_bases_norm
+    req_bases_norm="$(mktemp)"
+
+    while IFS= read -r b; do
+      b="$(sanitize_line "$b")"
+      [[ -z "$b" ]] && continue
+      normalize_required_base "$b"
+    done < "$req_bases" | sed 's/\r$//' | awk 'NF' | sort -u > "$req_bases_norm"
+
+    mv "$req_bases_norm" "$req_bases"
+
+    echo "[DBG] req_bases (normalized):"
+    nl -ba "$req_bases"
+
     # >>> creazione req_bases_ext <<<
+    # Contiene:
+    # - base canonica (es: getSaldo)
+    # - variant junit (es: testGetSaldo)
+    # Serve per drop/killer/cleanup che devono riconoscere entrambi gli stili.
     req_bases_ext="$(mktemp)"
+    while IFS= read -r b; do
+      b="$(sanitize_line "$b")"
+      [[ -z "$b" ]] && continue
+      echo "$b"
+      echo "$(junit_variant_of_base "$b")"
+    done < "$req_bases" | sed 's/\r$//' | awk 'NF' | sort -u > "$req_bases_ext"
 
-    awk '
-      {
-        b=$0
-        print b
-        if (b ~ /^test[A-Z]/) {
-          p=b
-          sub(/^test/,"",p)
-          p=tolower(substr(p,1,1)) substr(p,2)
-          print p
-        }
-      }
-    ' "$req_bases" | sed 's/\r$//' | sort -u > "$req_bases_ext"
-
-# >>> creazione req_prods <<<
+    # >>> creazione req_prods <<<
+    # Prod methods da usare per scoring e drop per chiamate ".prod(".
+    # Qui il prod è la base canonica (getSaldo, prelievo_saldoNegativo, ...)
     req_prods="$(mktemp)"
-    awk '
-      {
-        b=$0
-        if (b ~ /^test[A-Z]/) {
-          p=b
-          sub(/^test/,"",p)
-          p=tolower(substr(p,1,1)) substr(p,2)
-          print p
-        } else {
-          # se già non è testX, consideralo come prod diretto (es. getProfession)
-          print b
-        }
-      }
-    ' "$req_bases" | sed 's/\r$//' | sort -u > "$req_prods"
+    cat "$req_bases" | sed 's/\r$//' | awk 'NF' | sort -u > "$req_prods"
 
 echo "================= [DEBUG REQUIRED MAP] ================="
 echo "[DEBUG] cls_fqn = '$cls_fqn'"
@@ -1088,6 +1251,8 @@ echo "===================================================="
     perl -ne 'print "$.:\t$1\n" if(/(?:public|protected|private)?\s*void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" || true
     echo "===================================================="
 
+
+
     # =========================
     # tieni solo blocchi con base in req_bases
     # =========================
@@ -1231,6 +1396,21 @@ fi
 
     echo "[MERGE][DEBUG] methods AFTER HARD ASSIGN BY PROD CALL:"
     perl -ne 'print "$.:\t$1\n" if(/void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" | head -n 120 || true
+
+    # --- FIX alias: se required contiene "testXxx" ma HARD ASSIGN ha scelto "xxx", rinomina xxx_caseN -> testXxx_caseN ---
+    # (serve quando in @bases ci sono sia "azzeraSaldoSeNegativo" sia "testAzzeraSaldoSeNegativo" e vince quello "prod")
+    while read -r base; do
+      base="$(sanitize_line "$base")"
+      [[ -z "$base" ]] && continue
+      [[ "$base" =~ ^test[A-Z] ]] || continue
+
+      prod="${base#test}"                       # AzzeraSaldoSeNegativo
+      prod="$(echo "$prod" | sed 's/^./\L&/')"  # azzeraSaldoSeNegativo
+
+      # rinomina qualsiasi xxx_caseK -> testXxx_caseK (mantiene suffix/indice)
+      perl -0777 -i -pe "s/\b(void\s+)$prod(_[^\\s(]+)?(_case[0-9]+)\s*\(/\\1${base}\\2\\3(/g" "$tmp_methods"
+      perl -0777 -i -pe "s/\b(public\s+void\s+)$prod(_[^\\s(]+)?(_case[0-9]+)\s*\(/\\1${base}\\2\\3(/g" "$tmp_methods"
+    done < "$req_bases"
 
             # --- CANONICAL RENUMBER (stable): per ogni base, garantisci case1..caseN in ordine ---
             perl -i -pe '
@@ -1960,19 +2140,14 @@ extract_modified_classes() {
 
   local files
 
-  # =========================
-  # DIFF RANGE (safe)
-  # =========================
-  BASE_REF="${BASE_REF:-HEAD~1}"
-  TARGET_REF="${TARGET_REF:-}"
+# =========================
+# DIFF RANGE (commit-based ONLY)
+# =========================
+BASE_REF="${BASE_REF:-HEAD~1}"
+TARGET_REF="${TARGET_REF:-HEAD}"
 
-  if [[ -n "$TARGET_REF" ]]; then
-    echo "[1] Using git diff range: $BASE_REF..$TARGET_REF"
-    files="$(git diff --name-only "$BASE_REF..$TARGET_REF" -- app/src/main/java || true)"
-  else
-    echo "[1] Using git diff against: $BASE_REF (working tree)"
-    files="$(git diff --name-only "$BASE_REF" -- app/src/main/java || true)"
-  fi
+echo "[1] Using git diff range: $BASE_REF..$TARGET_REF"
+files="$(git diff --name-only "$BASE_REF..$TARGET_REF" -- app/src/main/java || true)"
 
   if [[ -z "${files//[[:space:]]/}" ]]; then
     echo "[1] Nessuna classe modificata in app/src/main/java. Stop."
@@ -2239,6 +2414,24 @@ branch_deleted() {
   # 2) Remove JUnit test methods precisely (NOT whole class)
   echo "[BRANCH ii] Pruning JUnit test methods from $TEST_ROOT ..."
   java -cp "$AST_JAR" TestPruner "$TESTS_TO_DELETE_FILE" "$TEST_ROOT"
+
+  # 2b) IMPORTANTISSIMO: se usi .baseline nel branch_modified,
+  # devi aggiornare anche i baseline, altrimenti verranno ripristinati test vecchi (come testHasSaldoPositivo_*).
+  echo "[BRANCH ii] Syncing pruned tests into existing .baseline files..."
+
+  while IFS= read -r test_fqn; do
+    test_fqn="$(sanitize_line "$test_fqn")"
+    [[ -z "$test_fqn" ]] && continue
+
+    test_class="${test_fqn%.*}"                 # banca.ContoBancarioTest
+    tf="$(fqn_to_test_path "$test_class")"      # app/src/test/java/banca/ContoBancarioTest.java
+    base="${tf}.baseline"
+
+    if [[ -f "$base" && -f "$tf" ]]; then
+      cp -f "$tf" "$base"
+      echo "[BRANCH ii] Updated baseline: $base"
+    fi
+  done < "$TESTS_TO_DELETE_FILE"
 
   # 3) Remove benchmark methods precisely (benchmark_<testMethod>) from inner class _Benchmark
   echo "[BRANCH ii] Pruning benchmark methods from $BENCH_ROOT ..."
@@ -2748,7 +2941,28 @@ branch_modified() {
         # =========================
         local whitelist
         whitelist="$(mktemp)"
-        cat "$req_bases_local" 2>/dev/null | sed 's/\r$//' | sort -u > "$whitelist"
+        # whitelist = basi richieste + varianti junit + (se in req_bases_local ci sono gia' _caseN, genera anche testX_caseN)
+        : > "$whitelist"
+        while IFS= read -r x; do
+          x="$(sanitize_line "$x")"
+          [[ -z "$x" ]] && continue
+
+          echo "$x" >> "$whitelist"
+
+          # se è base senza case -> aggiungi anche testVariant
+          if [[ "$x" != *_case* ]]; then
+            echo "$(junit_variant_of_base "$x")" >> "$whitelist"
+          else
+            # se è "base_caseN", aggiungi anche "testBase_caseN"
+            base="${x%_case*}"
+            suffix="${x#${base}}"
+            tv="$(junit_variant_of_base "$base")"
+            echo "${tv}${suffix}" >> "$whitelist"
+          fi
+        done < "$req_bases_local"
+
+        sed -i.bak 's/\r$//' "$whitelist" && rm -f "$whitelist.bak" 2>/dev/null || true
+        sort -u "$whitelist" -o "$whitelist"
         echo "[DBG] whitelist path: $whitelist"
         echo "[DBG] whitelist size: $(wc -l < "$whitelist")"
         nl -ba "$whitelist" | head -n 20
@@ -2827,9 +3041,9 @@ branch_modified() {
                 if(started && brace==0){
                   b = base_of(name)
 
-                  # drop se chiama PM e la base NON è whitelisted
+                  # drop se è un case-method e la sua base NON è whitelisted (indipendente da PM)
                   if (name in ok) keep=1
-                  else if(calls && !is_whitelisted_base(b)) keep=0
+                  else if (name ~ /_case[0-9]+$/ && !is_whitelisted_base(b)) keep=0
 
                   if(keep) printf "%s", buf
 
@@ -2843,6 +3057,14 @@ branch_modified() {
           ' "$tf" > "$tmp_cleanup" && mv "$tmp_cleanup" "$tf"
         done
 
+        pristine="${tf}.pristine"
+
+         if ! grep -qE '^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test\b' "$tf"; then
+                  echo "[FATAL][CLEANUP] No @Test left after cleanup in: $tf"
+                  echo "[FATAL][CLEANUP] This would cause 'No runnable methods'. Rolling back this attempt."
+                  cp -f "$pristine" "$tf"
+                  return 1
+                fi
 
         rm -f "$whitelist"
         rm -f "$req_bases_local"
@@ -3062,13 +3284,17 @@ branch_modified() {
 
         # Now prune old benchmark methods (this entry) and regenerate JMH for OWNER test class
         echo "[BRANCH i] Pruning old benchmark methods (this entry)..."
+        snapshot_bench "BEFORE BenchmarkPruner (branch_modified)"
         java -cp "$AST_JAR" BenchmarkPruner "$tmp_tests_to_regen" "$BENCH_ROOT"
+        snapshot_bench "AFTER  BenchmarkPruner (branch_modified)"
 
         local owner_test_class="${class_fqn}Test"   # e.g., utente.UtenteTest
+        snapshot_bench "BEFORE generate_jmh_for_testclass ($owner_test_class)"
         if ! generate_jmh_for_testclass "$owner_test_class"; then
           echo "[BRANCH i] JMH conversion failed for $owner_test_class -> failing pipeline."
           exit 1
         fi
+        snapshot_bench "AFTER  generate_jmh_for_testclass ($owner_test_class)"
 
         # delete pristine only on success
         while IFS= read -r cls; do
@@ -3080,6 +3306,10 @@ branch_modified() {
           fi
         done < "$test_classes_file"
 
+        if [[ "$RUN_AMBER" == "1" ]]; then
+            amber_run_for_owner_testclass "$owner_test_class" "modified" "$class_fqn"
+        fi
+
         break
       else
         # =======================
@@ -3088,8 +3318,6 @@ branch_modified() {
         echo "[BRANCH i][FATAL] Gradle validation FAILED."
         echo "[BRANCH i] Entry $class_fqn attempt $attempt failed."
         echo "[BRANCH i] Debug: showing merged test file(s) head (first 160 lines):"
-        echo "[BRANCH i] Debug: showing error line neighborhood (lines 45-80):"
-        sed -n '45,80p' "app/src/test/java/utente/personale/TecnicoTest.java" || true
 
         while IFS= read -r cls; do
           cls="$(sanitize_line "$cls")"
@@ -3324,6 +3552,10 @@ branch_added() {
           exit 1
         fi
 
+        if [[ "$RUN_AMBER" == "1" ]]; then
+            amber_run_for_owner_testclass "$owner_test_class" "added" "$class_fqn"
+        fi
+
         break
       else
         echo "[BRANCH iii][FATAL] Gradle FAILED for added entry $class_fqn attempt $attempt."
@@ -3350,8 +3582,8 @@ build_inputs
 
 # 3-way branches (final structure)
 branch_deleted
-#branch_modified
-#branch_added
+branch_modified
+branch_added
 
 sep
 echo "PIPELINE STRUCTURE COMPLETED."

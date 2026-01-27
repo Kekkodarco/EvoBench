@@ -17,74 +17,44 @@ public class TecnicoTest extends BaseCoverageTest {
     private Tecnico tecnico;
 
     @Test
-    public void testGetSurname() {
-        Tecnico tecnico = new Tecnico("John", "Doe", "Engineer", 1);
-        assertEquals("Doe", tecnico.getSurname());
-    }
-
-    @Test
-    public void testSetSurname() {
-        Tecnico tecnico = new Tecnico("John", "Doe", "Engineer", 1);
-        tecnico.setSurname("Smith");
-        assertEquals("Smith", tecnico.getSurname());
-    }
-
-    @Test
-    public void testSetCode() {
-        Tecnico tecnico = new Tecnico("John", "Doe", "Engineer", 1);
-        tecnico.setCode(2);
-        assertEquals(2, tecnico.getCode());
-    }
-
-    @Test
     public void testGetSurname_case1() {
-        // Test the true branch of the if statement
-        Tecnico tecnico = new Tecnico("John", "Smith", "Teacher", 123456);
-        assertEquals("Smith", tecnico.getSurname());
-        // Test the false branch of the if statement
-        tecnico = new Tecnico("John", null, "Teacher", 123456);
-        assertNull(tecnico.getSurname());
-    }
-
-    @Test
-    public void testSetSurname_case1() {
-        // Test the true branch of the if statement
-        Tecnico tecnico = new Tecnico("John", "Smith", "Teacher", 123456);
-        assertEquals("Smith", tecnico.getSurname());
-        tecnico.setSurname("Jones");
-        assertEquals("Jones", tecnico.getSurname());
-        // Test the false branch of the if statement
-        tecnico = new Tecnico("John", null, "Teacher", 123456);
-        assertNull(tecnico.getSurname());
-        tecnico.setSurname("Jones");
-        assertEquals("Jones", tecnico.getSurname());
-    }
-
-    @Test
-    public void testGetProfession_case1() {
         // Arrange
-        String expected = "Software Engineer";
-        Tecnico tecnico = new Tecnico("John", "Doe", expected, 123456);
+        String name = "John";
+        String surname = "Doe";
+        String profession = "Software Engineer";
+        int code = 123456;
+        Tecnico tecnico = new Tecnico(name, surname, profession, code);
         // Act
-        String actual = tecnico.getProfession();
+        String actualSurname = tecnico.getSurname();
         // Assert
-        assertEquals(expected, actual);
+        assertEquals("Doe", actualSurname);
     }
 
-    @Test
-    public void testGetName_case1() {
-        // Test that the method returns the correct name
-        String expected = "John";
-        Tecnico tecnico = new Tecnico("John", "Doe", "Software Engineer", 123456);
-        assertEquals(expected, tecnico.getName());
-    }
+    @org.openjdk.jmh.annotations.State(org.openjdk.jmh.annotations.Scope.Thread)
+    public static class _Benchmark extends listener.BaseCoverageTest._Benchmark {
 
-    @Test
-    public void testSetName_case1() {
-        // Test that the method updates the correct name
-        String expected = "Jane";
-        Tecnico tecnico = new Tecnico("John", "Doe", "Software Engineer", 123456);
-        tecnico.setName(expected);
-        assertEquals(expected, tecnico.getName());
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testGetSurname_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testGetSurname_case1, this.description("testGetSurname_case1"));
+        }
+
+        @java.lang.Override
+        public void before() throws java.lang.Throwable {
+            super.before();
+            this.implementation().setUp();
+        }
+
+        private TecnicoTest implementation;
+
+        @java.lang.Override
+        public void createImplementation() throws java.lang.Throwable {
+            this.implementation = new TecnicoTest();
+        }
+
+        @java.lang.Override
+        public TecnicoTest implementation() {
+            return this.implementation;
+        }
     }
 }
