@@ -17,7 +17,7 @@ public class Tecnico {
     public String getName() {return name;}
 
     public String getSurname() {
-        System.out.println("ddddd");
+        System.out.println("ddddddd");
         return surname;}
 
     public String getProfession() {return profession;}
