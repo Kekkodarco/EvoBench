@@ -10,8 +10,6 @@ public class Amministratore {
     public String getName() {return this.name;}
 
     public String getSurname() {
-
-        System.out.println("ddddd");
         return surname;
     }
 
