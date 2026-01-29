@@ -36,4 +36,11 @@ public class Tecnico {
     public void setCode(int code) {
         System.out.println("ddd");
         this.code = code;}
+
+    public void calcolo (int code){
+        if(code>0)
+            System.out.println(code);
+        else
+            System.out.println(code);
+    }
 }
