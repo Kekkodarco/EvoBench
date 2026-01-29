@@ -37,5 +37,8 @@ public class Tecnico {
         System.out.println("ddd");
         this.code = code;}
 
+    public void calcolo(int code) {
+        this.code = code;
+    }
 
 }
