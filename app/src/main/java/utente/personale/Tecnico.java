@@ -35,7 +35,7 @@ public class Tecnico {
     }
 
     public void setCode(int code) {
-        System.out.println("ddd");
+        System.out.println("dddfcf");
         this.code = code;}
 
 
