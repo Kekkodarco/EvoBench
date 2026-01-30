@@ -3,6 +3,13 @@ package utente;
 import banca.ContoBancario;
 
 public class Utente {
+
+    private String name;
+    private String surname;
+    private String telephone;
+    private String address;
+    private ContoBancario contoBancario;
+
     public Utente(String name, String surname, String telephone, String address, ContoBancario contoBancario) {
         this.name = name;//aggiungo commento
         this.surname = surname;//aggiunto altro commento
@@ -45,9 +52,7 @@ public class Utente {
         this.contoBancario = contoBancario;
     }
 
-    private String name;
-    private String surname;
-    private String telephone;
-    private String address;
-    private ContoBancario contoBancario;
+    public void setTelephone(String telephone) {
+        this.telephone = telephone;
+    }
 }
