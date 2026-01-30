@@ -19,7 +19,7 @@ public class Utente {
     }
 
     public String getName() {
-        System.out.println("dddddd");
+        System.out.println("ddd");
         return name;
     }
 
@@ -52,7 +52,4 @@ public class Utente {
         this.contoBancario = contoBancario;
     }
 
-    public void setTelephone(String telephone) {
-        this.telephone = telephone;
-    }
 }
