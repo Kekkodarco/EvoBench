@@ -38,12 +38,5 @@ public class Tecnico {
         System.out.println("dddfcf");
         this.code = code;}
 
-    public void calcolo(int code) {
-        this.code = code;
-    }
-    public void controllo(String surname){
-        this.surname = surname;
-    }
-
 
 }
