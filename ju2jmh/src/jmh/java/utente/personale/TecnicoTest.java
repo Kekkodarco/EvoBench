@@ -17,26 +17,55 @@ public class TecnicoTest extends BaseCoverageTest {
     private Tecnico tecnico;
 
     @Test
+    public void testCalcolo_case1() {
+        // Test the method with a positive code value, which should set the code field to that value and return without modifying any other fields.
+        int expectedCode = 1234;
+        Tecnico tecnico = new Tecnico("John", "Doe", "Teacher", 0);
+        tecnico.calcolo(expectedCode);
+        assertEquals(expectedCode, tecnico.getCode());
+    }
+
+    @Test
     public void testGetSurname_case1() {
         // Arrange
-        String name = "John";
-        String surname = "Doe";
-        String profession = "Software Engineer";
-        int code = 123456;
-        Tecnico tecnico = new Tecnico(name, surname, profession, code);
+        String expected = "surname";
+        Tecnico tecnico = new Tecnico("name", expected, "profession", 123456);
         // Act
-        String actualSurname = tecnico.getSurname();
+        String actual = tecnico.getSurname();
         // Assert
-        assertEquals("Doe", actualSurname);
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testSetSurname_case1() {
+        // Arrange
+        String expected = "new surname";
+        Tecnico tecnico = new Tecnico("name", "surname", "profession", 123456);
+        // Act
+        tecnico.setSurname(expected);
+        // Assert
+        assertEquals(expected, tecnico.getSurname());
     }
 
     @org.openjdk.jmh.annotations.State(org.openjdk.jmh.annotations.Scope.Thread)
     public static class _Benchmark extends listener.BaseCoverageTest._Benchmark {
 
         @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testCalcolo_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testCalcolo_case1, this.description("testCalcolo_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
         public void benchmark_testGetSurname_case1() throws java.lang.Throwable {
             this.createImplementation();
             this.runBenchmark(this.implementation()::testGetSurname_case1, this.description("testGetSurname_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testSetSurname_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testSetSurname_case1, this.description("testSetSurname_case1"));
         }
 
         @java.lang.Override

@@ -1,1 +1,1 @@
-utente.personale.Tecnico.getSurname
+utente.Utente.getName

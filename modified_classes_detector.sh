@@ -36,18 +36,31 @@ APP_TEST_SRC_DIR="./app/src/test/java"
 APP_TEST_CLASSES_DIR="./app/build/classes/java/test"
 
 #AMBER
-ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-AMBER_JAR="$ROOT_DIR/libs/jmh-core-1.37-all.jar"    # metti qui il jar AMBER
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+AMBER_JAR="$ROOT_DIR/libs/jmh-core-1.37-all.jar"
+ls -la "$AMBER_JAR" || true
+
+# fail-fast se manca (così non arrivi mai ad AMBER_JAR vuota senza accorgertene)
+if [[ -z "${AMBER_JAR:-}" ]]; then
+  echo "[FATAL] AMBER_JAR is EMPTY (var not set)."
+  exit 1
+fi
 AMBER_MODEL="${AMBER_MODEL:-oscnn}"        # oscnn | fcn | rocket
 AMBER_HOST="${AMBER_HOST:-localhost}"
 AMBER_PORT="${AMBER_PORT:-5001}"
-AMBER_RESULTS_DIR="${AMBER_RESULTS_DIR:-amber-results}"
+AMBER_RESULTS_DIR="${AMBER_RESULTS_DIR:-$ROOT_DIR/amber-results}"
+
+# AMBER/JMH classpath separator (Linux/macOS ":" ; Windows Git-Bash/MSYS/MINGW ";")
+CP_SEP=":"
+case "$(uname -s 2>/dev/null || echo "")" in
+  CYGWIN*|MINGW*|MSYS*) CP_SEP=";";;
+esac
+export CP_SEP
 
 # switch per step futuri (LLM/bench)
 RUN_CHAT2UNITTEST="${RUN_CHAT2UNITTEST:-1}"
 RUN_JU2JMH="${RUN_JU2JMH:-0}"
-#RUN_AMBER="${RUN_AMBER:-0}"
-RUN_AMBER=0
+RUN_AMBER="${RUN_AMBER:-1}"
 # ===================== Utils ==================================================
 sep(){ printf '%*s\n' 90 '' | tr ' ' '-'; }
 
@@ -58,10 +71,6 @@ sanitize_line() {
 }
 
 # Normalizza un base richiesto in forma coerente coi metodi @Test generati.
-# Esempi:
-#  - prelievo_saldoNegativo -> testPrelievo_saldoNegativo
-#  - prelievo              -> testPrelievo
-#  - testGetName           -> testGetName (unchanged)
 normalize_required_base() {
   local b="$1"
   b="$(sanitize_line "$b")"
@@ -69,7 +78,6 @@ normalize_required_base() {
 }
 
 # Dato un base "getSaldo" -> "testGetSaldo"
-# Dato "prelievo_saldoNegativo" -> "testPrelievo_saldoNegativo"
 junit_variant_of_base() {
   local b="$1"
   b="$(sanitize_line "$b")"
@@ -159,19 +167,96 @@ build_required_tests_for_methods() {
 
   echo "$out"
 }
+amber_env_before() {
+  #echo ">>> Disabling Turbo Boost (Intel CPUs)"
+  #echo 1 | sudo /usr/bin/tee /sys/devices/system/cpu/intel_pstate/no_turbo
+  #echo ">>> Disabling Hyper-Threading (Intel CPUs)"
+  #for cpu in {0..7}; do echo 0 | sudo /usr/bin/tee /sys/devices/system/cpu/cpu$cpu/online; done
+  if [[ "$OS" == "Windows_NT" ]] || uname -a | grep -qi mingw; then
+      echo ">>> [AMBER] env_before: skipped on Windows"
+      return 0
+    fi
+  echo ">>> Disabling Precision Boost (AMD CPUs)"
+  echo 0 | sudo tee /sys/devices/system/cpu/cpufreq/boost
+  echo ">>> Disabling Simultaneous MultiThreading (AMD CPUs)"
+  echo off | sudo tee /sys/devices/system/cpu/smt/control
+  echo ">>> Disabling ASLR"
+  echo 0 | sudo /usr/bin/tee /proc/sys/kernel/randomize_va_space
+  echo ">>> Stopping non-essential services"
+  sudo /usr/bin/systemctl stop bluetooth.service
+  sudo /usr/bin/systemctl stop cups.service
+  sudo /usr/bin/systemctl stop cups-browsed.service
+  sudo /usr/bin/systemctl stop fwupd.service
+  sudo /usr/bin/systemctl stop ModemManager.service
+  sudo /usr/bin/systemctl stop NetworkManager.service
+  sudo /usr/bin/systemctl stop wpa_supplicant.service
+  sudo /usr/bin/systemctl stop upower.service
+  sudo /usr/bin/systemctl stop switcheroo-control.service
+  true
+}
+
+amber_env_after() {
+  #echo ">>> Re-enabling Turbo Boost (Intel CPUs)"
+  #echo 0 | sudo /usr/bin/tee /sys/devices/system/cpu/intel_pstate/no_turbo
+  #echo ">>> Re-enabling Hyper-Threading (Intel CPUs)"
+  #for cpu in {0..7}; do echo 1 | sudo /usr/bin/tee /sys/devices/system/cpu/cpu$cpu/online; done
+  if [[ "$OS" == "Windows_NT" ]] || uname -a | grep -qi mingw; then
+      echo ">>> [AMBER] env_after: skipped on Windows"
+      return 0
+    fi
+  echo ">>> Re-enabling Precision Boost (AMD CPUs)"
+  echo 1 | sudo tee /sys/devices/system/cpu/cpufreq/boost
+  echo ">>> Re-enabling Simultaneous MultiThreading (AMD CPUs)"
+  echo on | sudo tee /sys/devices/system/cpu/smt/control
+  echo ">>> Re-enabling ASLR"
+  echo 2 | sudo /usr/bin/tee /proc/sys/kernel/randomize_va_space
+  echo ">>> Restarting services"
+  sudo /usr/bin/systemctl start bluetooth.service
+  sudo /usr/bin/systemctl start cups.service
+  sudo /usr/bin/systemctl start cups-browsed.service
+  sudo /usr/bin/systemctl start fwupd.service
+  sudo /usr/bin/systemctl start ModemManager.service
+  sudo /usr/bin/systemctl start NetworkManager.service
+  sudo /usr/bin/systemctl start wpa_supplicant.service
+  sudo /usr/bin/systemctl start upower.service
+  sudo /usr/bin/systemctl start switcheroo-control.service
+  true
+}
 
 amber_run_for_owner_testclass() {
-  local owner_test_class_fqn="$1"   # es: utente.personale.TecnicoTest
-  local kind="$2"                  # modified|added
-  local prod_class_fqn="$3"        # es: utente.personale.Tecnico
+  local owner_test_class_fqn="$1"
+  local kind="$2"                   # modified|added
+  local prod_class_fqn="$3"
 
   sep
   echo "[AMBER] Running for owner test class: $owner_test_class_fqn (kind=$kind, prod=$prod_class_fqn)"
 
+  : "${AMBER_PROFILE:=fast}"   # fast | full
+
+  # FAST
+  if [[ "$AMBER_PROFILE" == "full" ]]; then
+    : "${AMBER_FORKS:=5}"
+    : "${AMBER_WI:=5}"
+    : "${AMBER_WTIME:=10s}"
+    : "${AMBER_MI:=5}"
+    : "${AMBER_MTIME:=10s}"
+    : "${AMBER_TIMEOUT:=10m}"
+    : "${AMBER_THREADS:=1}"
+  else
+    : "${AMBER_FORKS:=1}"
+    : "${AMBER_WI:=1}"
+    : "${AMBER_WTIME:=1s}"
+    : "${AMBER_MI:=2}"
+    : "${AMBER_MTIME:=1s}"
+    : "${AMBER_TIMEOUT:=1m}"
+    : "${AMBER_THREADS:=1}"
+  fi
+
+  echo "[AMBER] JMH profile=$AMBER_PROFILE  forks=$AMBER_FORKS  w=($AMBER_WI x $AMBER_WTIME)  m=($AMBER_MI x $AMBER_MTIME)  to=$AMBER_TIMEOUT  t=$AMBER_THREADS"
+
   # 1) prereq jar
   if [[ ! -f "$AMBER_JAR" ]]; then
     echo "[AMBER][FATAL] Missing AMBER jar at: $AMBER_JAR"
-    echo "[AMBER] Put jmh-core-1.37-all.jar under libs/ and set AMBER_JAR accordingly."
     return 1
   fi
 
@@ -184,45 +269,254 @@ amber_run_for_owner_testclass() {
   fi
   echo "[AMBER] Using jmh jar: $jmh_jar"
 
-  # 3) results path (storico)
-  local sha ts outdir outfile
+  # 3) results path (storico) - DOPPIA VISTA:
+  #   - by-benchmark: storico + compare (stabile tra commit)
+  #   - by-commit: manifest/puntatori per audit (per commit)
+  local sha ts outdir_bench outdir_commit outfile
+
   sha="$(git rev-parse --short HEAD 2>/dev/null || echo "no-git")"
   ts="$(date +%Y%m%d_%H%M%S)"
-  outdir="$AMBER_RESULTS_DIR/$prod_class_fqn/$owner_test_class_fqn"
-  mkdir -p "$outdir"
 
-  outfile="$outdir/${kind}_${sha}_${ts}.json"
+  # Storico stabile: qui vivono history.list / last2.list / compare_*.*
+  outdir_bench="$AMBER_RESULTS_DIR/by-benchmark/$prod_class_fqn/$owner_test_class_fqn"
+  mkdir -p "$outdir_bench"
 
-  # 4) include filter: run only benchmarks generated for that test class
-  # ju2jmh di solito genera classi benchmark correlate al test class;
-  # filtro “safe” per nome: include la simple name del test class
-  local simple="${owner_test_class_fqn##*.}"
-  local include_pat="${simple}"
+  # Vista per commit: qui mettiamo solo manifest (o copie se vuoi in futuro)
+  outdir_commit="$AMBER_RESULTS_DIR/by-commit/$sha/$prod_class_fqn/$owner_test_class_fqn"
+  mkdir -p "$outdir_commit"
+
+  # JSON reale salvato nello storico stabile
+  outfile="$outdir_bench/${kind}_${sha}_${ts}.json"
+
+  # placeholder
+  : > "$outfile" 2>/dev/null || true
+
+  # include regex: matcha tutti i benchmark generati per quella test class
+  local include_pat="^${owner_test_class_fqn//./\\.}\\._Benchmark\\..*"
 
   echo "[AMBER] Output JSON: $outfile"
   echo "[AMBER] Model: $AMBER_MODEL  Service: $AMBER_HOST:$AMBER_PORT  Include: $include_pat"
 
-  # 5) run AMBER(JMH Main)
-  # -rf json -rff file
-  # -hmodel / -host / -hport = opzioni AMBER (come README)
-  # -i include pattern = filtra benchmark
-  java -cp "$AMBER_JAR:$jmh_jar" org.openjdk.jmh.Main \
-      -rf json -rff "$outfile" \
-      -hmodel "$AMBER_MODEL" -host "$AMBER_HOST" -hport "$AMBER_PORT" \
-      "$include_pat"
+  # ==============
+  # ALWAYS-RUN cleanup (amber_env_after) via trap
+  # ==============
+  local hook_after_ran=0
+  cleanup_amber() {
+    if [[ "${hook_after_ran:-0}" -eq 0 ]]; then
+      set +e
+      amber_env_after
+      local hook_rc=$?
+      set -e
+      if [[ $hook_rc -ne 0 ]]; then
+        echo "[AMBER][WARN] amber_env_after failed (rc=$hook_rc) -> continuing anyway."
+      fi
+      hook_after_ran=1
+    fi
+  }
+  trap cleanup_amber RETURN
 
-  rc=$?
-  if [[ $rc -ne 0 ]]; then
-    echo "[AMBER][FATAL] AMBER run failed (rc=$rc)."
-    return $rc
+  # 4) env tuning: su Windows/MINGW/MSYS/CYGWIN skippa (niente sudo spam)
+  local uname_s
+  uname_s="$(uname -s 2>/dev/null || echo "unknown")"
+  case "$uname_s" in
+    MINGW*|MSYS*|CYGWIN*)
+      echo ">>> [AMBER] Skipping CPU/ASLR/service tuning on Windows ($uname_s)"
+      ;;
+    *)
+      set +e
+      amber_env_before
+      local hook_rc=$?
+      set -e
+      if [[ $hook_rc -ne 0 ]]; then
+        echo "[AMBER][WARN] amber_env_before failed (rc=$hook_rc) -> continuing anyway."
+      fi
+      ;;
+  esac
+
+  # 5) sanity: check help contains -hmodel (NON FATAL)
+  local help_out
+  help_out="$(java -cp "${AMBER_JAR}${CP_SEP}${jmh_jar}" org.openjdk.jmh.Main -h 2>&1)"
+  if ! grep -qi -- "-hmodel" <<< "$help_out"; then
+    echo "[AMBER][WARN] Could not detect -hmodel in -h output. Continuing anyway."
+    echo "[AMBER][DBG] jmh -h output (first 120 lines):"
+    echo "$help_out" | sed -n '1,120p'
   fi
 
-  echo "[AMBER] OK -> saved: $outfile"
+  # 6) detect optional host flag name (if any)
+  local HOST_OPT=""
+  HOST_OPT="$(grep -Eo -- '-hhost\b|-host\b|-haddr\b' <<< "$help_out" | head -n 1 || true)"
 
-  # (optional) aggiorna latest/prev per confronto “ultimo vs penultimo”
-  ln -sf "$(basename "$outfile")" "$outdir/latest.json" 2>/dev/null || cp -f "$outfile" "$outdir/latest.json"
+  # log file
+  local logf="${outfile%.json}.log"
+  echo "[AMBER] Log file: $logf"
+
+  local rc=0
+  if [[ -n "$HOST_OPT" ]]; then
+    echo "[AMBER] Using host flag: $HOST_OPT"
+    java -cp "${AMBER_JAR}${CP_SEP}${jmh_jar}" org.openjdk.jmh.Main \
+      -rf json -rff "$outfile" \
+      -f "$AMBER_FORKS" \
+      -wi "$AMBER_WI" -w "$AMBER_WTIME" \
+      -i  "$AMBER_MI" -r "$AMBER_MTIME" \
+      -to "$AMBER_TIMEOUT" \
+      -t "$AMBER_THREADS" \
+      -hmodel "$AMBER_MODEL" "$HOST_OPT" "$AMBER_HOST" -hport "$AMBER_PORT" \
+      "$include_pat" \
+      >"$logf" 2>&1
+    rc=$?
+  else
+    echo "[AMBER] No host flag supported -> using default host, passing only -hmodel/-hport"
+    java -cp "${AMBER_JAR}${CP_SEP}${jmh_jar}" org.openjdk.jmh.Main \
+      -rf json -rff "$outfile" \
+      -f "$AMBER_FORKS" \
+      -wi "$AMBER_WI" -w "$AMBER_WTIME" \
+      -i  "$AMBER_MI" -r "$AMBER_MTIME" \
+      -to "$AMBER_TIMEOUT" \
+      -t "$AMBER_THREADS" \
+      -hmodel "$AMBER_MODEL" -hport "$AMBER_PORT" \
+      "$include_pat" \
+      >"$logf" 2>&1
+    rc=$?
+  fi
+
+  if [[ $rc -ne 0 ]]; then
+    echo "[AMBER][ERROR] JMH/AMBER failed (rc=$rc). See log: $logf"
+  fi
+
+  # 7) post-check: file creato e non vuoto?
+  if [[ -s "$outfile" ]]; then
+    echo "[AMBER] OK -> saved: $outfile"
+  else
+    echo "[AMBER][WARN] Output json missing/empty: $outfile"
+    echo "[AMBER][DBG] Maybe include pattern matched nothing: $include_pat"
+    echo "[AMBER][DBG] Try listing available benchmarks:"
+    java -cp "${AMBER_JAR}${CP_SEP}${jmh_jar}" org.openjdk.jmh.Main -l 2>/dev/null \
+      | grep -E "${owner_test_class_fqn//./\\.}\\.\\_Benchmark\\." | head -n 50 || true
+  fi
+
+  # storico (SEMPRE nello storico stabile by-benchmark)
+  if [[ -s "$outfile" ]]; then
+    echo "$outfile" >> "$outdir_bench/history.list"
+    tail -n 2 "$outdir_bench/history.list" > "$outdir_bench/last2.list"
+
+    # Vista per commit: salva un manifest con il path reale del JSON
+    # (evita symlink su Windows; niente copie; solo puntatori)
+    {
+      echo "kind=$kind"
+      echo "sha=$sha"
+      echo "ts=$ts"
+      echo "prod_class=$prod_class_fqn"
+      echo "test_class=$owner_test_class_fqn"
+      echo "include_pat=$include_pat"
+      echo "json=$outfile"
+      echo "log=${outfile%.json}.log"
+    } > "$outdir_commit/manifest_${kind}_${ts}.txt"
+
+    # (opzionale) una lista append-only per commit
+    echo "$outfile" >> "$outdir_commit/history.list"
+  fi
+
+  # compare: DEVE usare lo storico stabile (così confronta C1 vs C3 anche se in mezzo c'è added)
+  if [[ "$kind" == "modified" ]]; then
+    amber_compare_last2 "$outdir_bench"
+  fi
+
+  return 0
 }
+amber_compare_last2() {
+  local outdir="$1"
+  local last2="$outdir/last2.list"
+  [[ -f "$last2" ]] || return 0
+  [[ $(wc -l < "$last2") -eq 2 ]] || return 0
+  command -v jq >/dev/null 2>&1 || { echo "[AMBER][CMP] jq missing -> skip compare"; return 0; }
 
+  local prev curr
+  prev="$(sed -n '1p' "$last2")"
+  curr="$(sed -n '2p' "$last2")"
+  [[ -f "$prev" && -f "$curr" ]] || { echo "[AMBER][CMP] missing json files -> skip"; return 0; }
+
+  # se uno dei due è vuoto, non possiamo comparare
+  if [[ ! -s "$prev" || ! -s "$curr" ]]; then
+    echo "[AMBER][CMP] prev/curr json empty -> skip"
+    echo "  prev=$prev (size=$(wc -c < "$prev" 2>/dev/null || echo 0))"
+    echo "  curr=$curr (size=$(wc -c < "$curr" 2>/dev/null || echo 0))"
+    return 0
+  fi
+
+  local ts rpt_json rpt_txt jqprog
+  ts="$(date +%Y%m%d_%H%M%S)"
+  rpt_json="$outdir/compare_${ts}.json"
+  rpt_txt="$outdir/compare_${ts}.txt"
+  jqprog="$(mktemp)"
+
+  cat > "$jqprog" <<'JQ'
+def score_map($arr):
+  reduce $arr[] as $b ({}; . + { ($b.benchmark): ($b.primaryMetric.score) });
+
+$prev[0] as $P
+| $curr[0] as $C
+| (score_map($P)) as $prevMap
+| (score_map($C)) as $currMap
+| ($prevMap | keys) as $prevKeys
+| ($currMap | keys) as $currKeys
+| ($prevKeys | map(select($currMap[.] != null))) as $common
+| {
+    prev_file: $prev_file,
+    curr_file: $curr_file,
+    common_count: ($common | length),
+    added: ($currKeys - $prevKeys),
+    removed: ($prevKeys - $currKeys),
+    comparisons: (
+      $common
+      | map({
+          benchmark: .,
+          prev: $prevMap[.],
+          curr: $currMap[.],
+          delta_pct: ((($currMap[.] - $prevMap[.]) / $prevMap[.]) * 100)
+        })
+      | sort_by(.delta_pct) | reverse
+    )
+  }
+JQ
+
+  # NB: --slurpfile carica ciascun file come array (quindi $prev[0] è l’array reale dei benchmark)
+  if ! jq -n \
+      --arg prev_file "$prev" --arg curr_file "$curr" \
+      --slurpfile prev "$prev" --slurpfile curr "$curr" \
+      -f "$jqprog" > "$rpt_json" 2>/dev/null; then
+    echo "[AMBER][CMP] jq failed -> skip compare."
+    echo "  prev=$prev"
+    echo "  curr=$curr"
+    echo "  Tip: controlla che siano JSON validi:"
+    echo "    head -n 5 \"$prev\""
+    echo "    head -n 5 \"$curr\""
+    rm -f "$jqprog"
+    return 0
+  fi
+
+  {
+    echo "prev: $prev"
+    echo "curr: $curr"
+    echo "----"
+    jq -r '
+      "common=" + (.common_count|tostring)
+      + " added=" + ((.added|length)|tostring)
+      + " removed=" + ((.removed|length)|tostring)
+    ' "$rpt_json"
+    echo "---- TOP comparisons (by delta_pct) ----"
+    jq -r '
+      .comparisons[]
+      | "\(.benchmark)\n  prev=\(.prev)  curr=\(.curr)  delta_pct=\(.delta_pct)\n"
+    ' "$rpt_json" | head -n 120
+    echo "---- added ----"
+    jq -r '.added[]?' "$rpt_json"
+    echo "---- removed ----"
+    jq -r '.removed[]?' "$rpt_json"
+  } > "$rpt_txt"
+
+  rm -f "$jqprog"
+  echo "[AMBER][CMP] report: $rpt_txt"
+}
 generate_jmh_for_testclass() {
   local test_class_fqn="$1"   # es: utente.UtenteTest
 
@@ -281,8 +575,6 @@ generate_jmh_for_testclass() {
         return 1
       fi
 
-        # --- NEW: merge generated sources into real out dir (overwrite only same files) ---
-        # --- NEW: merge ONLY current class into real out dir (avoid overwriting other classes) ---
         mkdir -p "$JU2JMH_OUT_DIR"
 
         local rel
@@ -1303,95 +1595,92 @@ fi
           BEGIN { our %k; }
           if (/^\s*(?:public|protected|private)?\s*void\s+([A-Za-z0-9_]+)\s*\(/) {
             my $old = $1;
+
+            # CANE deve lavorare SOLO su metodi che già hanno _caseN
+            next unless $old =~ /_case\d+$/;
+
+            # base = nome senza _caseN e senza eventuale _testN finale
             (my $b = $old) =~ s/_case\d+$//;
+            $b =~ s/_test\d+$//;
+
             my $n = ++$k{$b};
             my $new = $b . "_case" . $n;
+
             s/\b\Q$old\E\b/$new/;
           }
         ' "$tmp_methods"
-        # --- END CANONICAL RENUMBER ---
 
     # =========================
-    # HARD ASSIGN BY PROD CALL (deterministico)
+    # HARD ASSIGN BY PROD CALL (deterministico) - FINAL NAME: <base>_caseN
     # - ogni blocco viene assegnato a UNA base richiesta se contiene ".<prod>("
-    # - poi rinomina in <base>_case1..N
+    # - rinomina direttamente in <base>_case1..N
     # =========================
     REQBASES="$req_bases" perl -0777 -i -pe '
-      use strict; use warnings;
+      use strict;
+      use warnings;
 
       my $reqfile = $ENV{REQBASES};
+
+      # ---- load required bases ----
       open my $fh, "<", $reqfile or die "cannot open REQBASES: $!";
       my @bases;
-      while(my $l=<$fh>){
-        $l =~ s/\r?\n$//; $l =~ s/^\s+|\s+$//g;
-        next if $l eq "";
-        push @bases, $l;
+      while (my $line = <$fh>) {
+        $line =~ s/\r?\n$//;
+        $line =~ s/^\s+|\s+$//g;
+        next if $line eq "";
+        push @bases, $line;
       }
       close $fh;
 
-      # base -> prod (testGetSurname -> getSurname)
-      my %prod;
-      for my $b (@bases){
-        (my $p = $b) =~ s/^test//;
-        $p = lcfirst($p);
-        $prod{$b} = $p;
+      # dedup keeping order
+      my %seen;
+      @bases = grep { !$seen{$_}++ } @bases;
+
+      # ---- base -> prod name (strip leading test, lowercase first char) ----
+      my %base2prod;
+      for my $b (@bases) {
+        my $p = $b;
+        $p =~ s/^test//;                 # testGetSurname -> GetSurname
+        $p = lcfirst($p);                # GetSurname -> getSurname
+        $base2prod{$b} = $p;
       }
 
-      sub is_setter_base {
-        my ($b) = @_;
-        return ($b =~ /^testSet[A-Z]/) ? 1 : 0;
-      }
+      # ---- split into blocks by marker ----
+      my @blocks = split(/\/\*__TEST_BLOCK__\*\/\s*/s, $_);
 
-      my @blocks = split(/\n\s*\/\*__TEST_BLOCK__\*\/;?\s*\n/s, $_);
-      my %count;
-      my @out;
+      # counter per base for case numbering
+      my %cnt;
 
-      for my $blk (@blocks){
-        next if $blk !~ /void\s+([A-Za-z0-9_]+)\s*\(/;
+      for my $blk (@blocks) {
 
-        my $best_base  = "";
-        my $best_score = -1;
-        my $best_is_setter = 0;
+        # skip empty/no-method chunks
+        next unless $blk =~ /\bvoid\b\s+([A-Za-z0-9_]+)\s*\(/;
 
-        for my $b (@bases){
-          my $p = $prod{$b};
+        # find assigned base by matching prod call in body
+        my $assigned;
+        for my $b (@bases) {
+          my $p = $base2prod{$b};
 
-          # count occurrences of ".prod("
-          my $hits = (() = ($blk =~ /\.\s*\Q$p\E\s*\(/g));
-
-          # base score: hits * 100
-          my $score = $hits * 100;
-
-          # small bonus if method name itself contains prod (helps when calls are absent)
-          if($blk =~ /void\s+([A-Za-z0-9_]+)\s*\(/){
-            my $old = $1;
-            $score += 10 if index(lc($old), lc($p)) != -1;
-          }
-
-          my $is_set = is_setter_base($b);
-
-          # choose best by score; tie-break: prefer setter if both have evidence
-          if($score > $best_score
-             || ($score == $best_score && $score > 0 && $is_set && !$best_is_setter)){
-            $best_score = $score;
-            $best_base  = $b;
-            $best_is_setter = $is_set;
+          # match ".prodName(" with optional whitespace
+          if ($blk =~ /\.\s*\Q$p\E\s*\(/s) {
+            $assigned = $b;
+            last;
           }
         }
 
-        # rename only if we found evidence
-        if($best_score > 0 && $best_base ne ""){
-          my $n = ++$count{$best_base};
-          my $new = $best_base . "_case" . $n;
+        # if no match, keep as-is (or you can choose to drop it later)
+        next unless defined $assigned;
 
-          # rename FULL method name (no suffix preservation)
-          $blk =~ s/(void\s+)[A-Za-z0-9_]+(\s*\()/$1$new$2/;
-        }
+        my $newname = $assigned . "_case" . (++$cnt{$assigned});
 
-        push @out, $blk;
+        # rename method name in signature
+        $blk =~ s/(\bvoid\b\s+)[A-Za-z0-9_]+(\s*\()/$1$newname$2/;
+
+        # (optional) also rename any internal self-references, just in case
+        # $blk =~ s/\b\Q$old\E\b/$newname/g;  # not needed usually
       }
 
-      $_ = join("\n/*__TEST_BLOCK__*/\n", @out) . "\n";
+      $_ = join("/*__TEST_BLOCK__*/\n\n", @blocks);
     ' "$tmp_methods"
 
     echo "[MERGE][DEBUG] methods AFTER HARD ASSIGN BY PROD CALL:"
@@ -2978,83 +3267,87 @@ branch_modified() {
 
           tmp_cleanup="$(mktemp)"
           awk -v WL="$whitelist" -v PM="$pm" '
-            BEGIN{
-              while((getline x < WL)>0){ gsub(/\r/,"",x); if(x!="") ok[x]=1 }
-              close(WL)
-              inBlock=0; buf=""; brace=0; started=0; name=""; keep=1; calls=0;
-            }
-
-            function is_test_anno(line){ return line ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test/ }
-            function is_sig(line){ return line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/ }
-
-            function extract_name(line, t){
-              t=line; sub(/.*void[[:space:]]+/,"",t); sub(/\(.*/,"",t); gsub(/[[:space:]]+/,"",t); return t
-            }
-
-            function base_of(n, t){
-              t=n
-              sub(/_case[0-9]+$/,"",t)
-              return t
-            }
-
-            function brace_delta(s, t,o,c){
-              t=s; o=gsub(/\{/,"{",t); t=s; c=gsub(/\}/,"}",t); return o-c
-            }
-
-            function is_whitelisted_base(b,   x, bx){
-              # Caso 1: la whitelist contiene esattamente la base (raro, ma ok)
-              if (b in ok) return 1
-
-              # Caso 2: esiste almeno un case whitelisted per questa base
-              for (x in ok) {
-                if (index(x, b "_case") == 1) return 1
+              BEGIN{
+                while((getline x < WL)>0){ gsub(/\r/,"",x); if(x!="") ok[x]=1 }
+                close(WL)
+                inBlock=0; buf=""; brace=0; started=0; name="";
               }
 
-              # Caso 3: fallback generico: qualunque entry whitelisted che inizi con b + "_case"
-              for (x in ok) {
-                if (index(x, b "_case") == 1) return 1
+              function is_test_anno(line){ return line ~ /^[[:space:]]*@([A-Za-z0-9_.]*\.)?Test/ }
+              function is_sig(line){ return line ~ /^[[:space:]]*(public|protected|private)?[[:space:]]*(static[[:space:]]+)?void[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/ }
+
+              function extract_name(line, t){
+                t=line; sub(/.*void[[:space:]]+/,"",t); sub(/\(.*/,"",t); gsub(/[[:space:]]+/,"",t); return t
               }
 
-              return 0
-            }
-
-            {
-              line=$0
-
-              if(!inBlock && is_test_anno(line)){
-                inBlock=1; buf=line "\n"; brace=0; started=0; name=""; keep=1; calls=0;
-                next
+              function base_of(n, t){
+                t=n
+                sub(/_case[0-9]+$/,"",t)
+                return t
               }
 
-              if(inBlock){
-                buf = buf line "\n"
+              function brace_delta(s, t,o,c){
+                t=s; o=gsub(/\{/,"{",t); t=s; c=gsub(/\}/,"}",t); return o-c
+              }
 
-                if(name=="" && is_sig(line)){
-                  name = extract_name(line)
+              function calls_pm(block){
+                # chiamata qualificata o non qualificata
+                return (block ~ ("\\." PM "[[:space:]]*\\(")) || (block ~ ("\\b" PM "[[:space:]]*\\("))
+              }
+
+              {
+                line=$0
+
+                if(!inBlock && is_test_anno(line)){
+                  inBlock=1; buf=line "\n"; brace=0; started=0; name="";
+                  next
                 }
 
-                if(line ~ (PM "[[:space:]]*\\(")) calls=1
+                if(inBlock){
+                  buf = buf line "\n"
 
-                d = brace_delta(line)
-                if(d != 0){ started=1; brace += d }
+                  if(name=="" && is_sig(line)){
+                    name = extract_name(line)
+                  }
 
-                if(started && brace==0){
-                  b = base_of(name)
+                  d = brace_delta(line)
+                  if(d != 0){ started=1; brace += d }
 
-                  # drop se è un case-method e la sua base NON è whitelisted (indipendente da PM)
-                  if (name in ok) keep=1
-                  else if (name ~ /_case[0-9]+$/ && !is_whitelisted_base(b)) keep=0
+                  if(started && brace==0){
+                    # Decisione:
+                    # - se NON è un _caseN -> tieni sempre (non tocchiamo i base)
+                    # - se è _caseN:
+                    #    - se NON chiama PM -> tieni (è case di altri metodi)
+                    #    - se chiama PM -> tieni SOLO se whitelisted
+                    keep=1
+                    if(name ~ /_case[0-9]+$/){
+                      b = base_of(name)
+                      if(calls_pm(buf)){
+                        # correlato al metodo modificato: tienilo solo se whitelist lo permette
+                        if( (name in ok) || (b in ok) ){
+                          keep=1
+                        } else {
+                          keep=0
+                        }
+                      } else {
+                        keep=1
+                      }
+                    }
 
-                  if(keep) printf "%s", buf
+                    if(keep) printf "%s", buf
 
-                  inBlock=0; buf=""; brace=0; started=0; name=""; keep=1; calls=0
+                    inBlock=0; buf=""; brace=0; started=0; name="";
+                  }
+                  next
                 }
-                next
+
+                print
               }
 
-              print
-            }
-          ' "$tf" > "$tmp_cleanup" && mv "$tmp_cleanup" "$tf"
+              END{
+                if(inBlock==1) printf "%s", buf;
+              }
+            ' "$tf" > "$tmp_cleanup" && mv "$tmp_cleanup" "$tf"
         done
 
         pristine="${tf}.pristine"

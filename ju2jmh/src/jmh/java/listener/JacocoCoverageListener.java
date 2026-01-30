@@ -21,8 +21,8 @@ import java.util.*;
 public class JacocoCoverageListener extends TestWatcher {
 
     private static final String JACOCO_MBEAN_NAME = "org.jacoco:type=Runtime";
-
     private static final String COVERAGE_MATRIX_FILE = "coverage-matrix.json";
+    private static volatile boolean warnedNoJacocoMBean = false;
 
     @Override
     protected void succeeded(Description description) {
@@ -39,49 +39,102 @@ public class JacocoCoverageListener extends TestWatcher {
             // Connect to the platform MBean server
             MBeanServerConnection mbsc = ManagementFactory.getPlatformMBeanServer();
             ObjectName objectName = new ObjectName(JACOCO_MBEAN_NAME);
-            // Invoke the dump command with no reset (you can set to true if you want to reset coverage after each dump)
-            byte[] executionData = (byte[]) mbsc.invoke(objectName, "getExecutionData", new Object[] { true }, new String[] { "boolean" });
-            // Use JaCoCo's ExecutionDataReader to parse the data
+
+            // If JaCoCo agent is not attached in this JVM (typical in JMH/AMBER),
+            // the MBean won't exist -> avoid spamming stacktraces
+            if (!mbsc.isRegistered(objectName)) {
+                if (!warnedNoJacocoMBean) {
+                    warnedNoJacocoMBean = true;
+                    System.out.println("[JacocoCoverageListener][WARN] JaCoCo MBean not found (org.jacoco:type=Runtime). " +
+                            "Coverage collection skipped for this JVM. If this happens under JMH/AMBER, " +
+                            "you must attach JaCoCo agent to that JVM to collect coverage.");
+                }
+                return;
+            }
+
+            // Invoke the dump command with reset=true
+            byte[] executionData = (byte[]) mbsc.invoke(
+                    objectName,
+                    "getExecutionData",
+                    new Object[]{true},
+                    new String[]{"boolean"}
+            );
+
+            // Parse execution data
             ExecutionDataStore executionDataStore = new ExecutionDataStore();
             SessionInfoStore sessionInfoStore = new SessionInfoStore();
             ExecutionDataReader reader = new ExecutionDataReader(new ByteArrayInputStream(executionData));
             reader.setExecutionDataVisitor(executionDataStore);
             reader.setSessionInfoVisitor(sessionInfoStore);
             reader.read();
-            // Analyze the covered classes to determine methods
+
+            // Analyze covered classes to determine covered methods
             CoverageBuilder coverageBuilder = new CoverageBuilder();
             Analyzer analyzer = new Analyzer(executionDataStore, coverageBuilder);
-            // Specify the directory where your compiled classes are located
-            // Adjust the path as needed
-            File classesDir = new File("build/classes/java/main");
-            ArrayList<String> fullyQualifiedCurrentMethods = new ArrayList<>();
-            // Analyze each class file to extract covered methods
-            for (ExecutionData data : executionDataStore.getContents()) {
-                if (data.hasHits()) {
-                    String className = data.getName().replace("/", ".");
-                    // Analyze the corresponding .class file
-                    File classFile = new File(classesDir, data.getName() + ".class");
-                    if (classFile.exists()) {
-                        try (FileInputStream classStream = new FileInputStream(classFile)) {
-                            analyzer.analyzeClass(classStream, data.getName());
-                        }
-                    }
-                    // Print the covered method names
-                    Set<String> coveredMethods = getCoveredMethods(coverageBuilder, className);
-                    ArrayList<String> coveredMethodsFullyQualified = new ArrayList<>();
-                    for (String method : coveredMethods) {
-                        if (method.equals("<init>"))
-                            method = getSimpleClassName(className);
-                        fullyQualifiedCurrentMethods.add(className + "." + method);
-                        coveredMethodsFullyQualified.add(className + "." + method);
-                    }
-                    // Update the json coverage-matrix file
-                    updateCoverageMatrixFile(description.getClassName() + "." + description.getMethodName(), coveredMethodsFullyQualified);
+
+            // Try multiple possible class output dirs depending on where we run from
+            File[] candidateDirs = new File[]{
+                    new File("build/classes/java/main"),
+                    new File("app/build/classes/java/main"),
+                    new File("build/classes/java/test"),
+                    new File("app/build/classes/java/test")
+            };
+
+            File classesDir = null;
+            for (File d : candidateDirs) {
+                if (d.exists() && d.isDirectory()) {
+                    classesDir = d;
+                    break;
                 }
             }
-            deleteOlderCoveredMethodsFromMatrix(description.getClassName() + "." + description.getMethodName(), fullyQualifiedCurrentMethods);
+
+            if (classesDir == null) {
+                // Not fatal: we can’t map execution data to .class files, so skip update
+                System.out.println("[JacocoCoverageListener][WARN] No classesDir found among known candidates. " +
+                        "Coverage matrix update skipped for: " + description.getClassName() + "." + description.getMethodName());
+                return;
+            }
+
+            ArrayList<String> fullyQualifiedCurrentMethods = new ArrayList<>();
+
+            for (ExecutionData data : executionDataStore.getContents()) {
+                if (!data.hasHits()) continue;
+
+                String className = data.getName().replace("/", ".");
+                File classFile = new File(classesDir, data.getName() + ".class");
+
+                if (classFile.exists()) {
+                    try (FileInputStream classStream = new FileInputStream(classFile)) {
+                        analyzer.analyzeClass(classStream, data.getName());
+                    }
+                }
+
+                Set<String> coveredMethods = getCoveredMethods(coverageBuilder, className);
+                ArrayList<String> coveredMethodsFullyQualified = new ArrayList<>();
+
+                for (String method : coveredMethods) {
+                    String m = method;
+                    if ("<init>".equals(m)) m = getSimpleClassName(className);
+                    fullyQualifiedCurrentMethods.add(className + "." + m);
+                    coveredMethodsFullyQualified.add(className + "." + m);
+                }
+
+                updateCoverageMatrixFile(
+                        description.getClassName() + "." + description.getMethodName(),
+                        coveredMethodsFullyQualified
+                );
+            }
+
+            deleteOlderCoveredMethodsFromMatrix(
+                    description.getClassName() + "." + description.getMethodName(),
+                    fullyQualifiedCurrentMethods
+            );
+
         } catch (Exception e) {
-            e.printStackTrace();
+            // Do NOT spam stacktraces in tight JMH loops.
+            System.out.println("[JacocoCoverageListener][WARN] Coverage update failed for " +
+                    description.getClassName() + "." + description.getMethodName() +
+                    " -> " + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
 

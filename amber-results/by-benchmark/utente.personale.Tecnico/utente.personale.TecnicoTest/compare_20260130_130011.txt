@@ -1,0 +1,11 @@
+prev: /c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.personale.Tecnico/utente.personale.TecnicoTest/added_8127aa9_20260130_125412.json
+curr: /c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.personale.Tecnico/utente.personale.TecnicoTest/modified_0302cc7_20260130_125828.json
+----
+common=1 added=0 removed=1
+---- TOP comparisons (by delta_pct) ----
+utente.personale.TecnicoTest._Benchmark.benchmark_testGetSurname_case1
+  prev=109111.34151234817  curr=108606.30660812974  delta_pct=-0.46286196945103275
+
+---- added ----
+---- removed ----
+utente.personale.TecnicoTest._Benchmark.benchmark_testCalcolo_case1

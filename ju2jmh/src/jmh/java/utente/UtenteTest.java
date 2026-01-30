@@ -36,12 +36,53 @@ public class UtenteTest extends BaseCoverageTest {
 
     @Test
     public void testGetName_case1() {
-        // Arrange
-        String expected = "John Doe";
-        Utente utente = new Utente(expected, "Doe", "555-1234", "123 Main St.", null);
-        // Act
-        String actual = utente.getName();
-        // Assert
-        assertEquals("getName() should return the name", expected, actual);
+        // assert that the name is correctly set
+        assertEquals("John", utente.getName());
+    }
+
+    @org.openjdk.jmh.annotations.State(org.openjdk.jmh.annotations.Scope.Thread)
+    public static class _Benchmark extends listener.BaseCoverageTest._Benchmark {
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testGetTelephone() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testGetTelephone, this.description("testGetTelephone"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testGetAddress() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testGetAddress, this.description("testGetAddress"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testGetContoBancario() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testGetContoBancario, this.description("testGetContoBancario"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testGetName_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testGetName_case1, this.description("testGetName_case1"));
+        }
+
+        @java.lang.Override
+        public void before() throws java.lang.Throwable {
+            super.before();
+            this.implementation().setUp();
+        }
+
+        private UtenteTest implementation;
+
+        @java.lang.Override
+        public void createImplementation() throws java.lang.Throwable {
+            this.implementation = new UtenteTest();
+        }
+
+        @java.lang.Override
+        public UtenteTest implementation() {
+            return this.implementation;
+        }
     }
 }

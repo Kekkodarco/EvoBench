@@ -1,0 +1,8 @@
+kind=modified
+sha=02c521c
+ts=20260130_125105
+prod_class=utente.personale.Tecnico
+test_class=utente.personale.TecnicoTest
+include_pat=^utente\.personale\.TecnicoTest\._Benchmark\..*
+json=/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.personale.Tecnico/utente.personale.TecnicoTest/modified_02c521c_20260130_125105.json
+log=/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.personale.Tecnico/utente.personale.TecnicoTest/modified_02c521c_20260130_125105.log

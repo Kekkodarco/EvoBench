@@ -19,8 +19,8 @@ public class AmministratoreTest extends BaseCoverageTest {
     @Test
     public void testGetSurname_case1() {
         // Arrange
-        String expected = "surname";
-        Amministratore amministratore = new Amministratore("name", expected, "department");
+        String expected = "Bianchi";
+        Amministratore amministratore = new Amministratore("Mario", expected, "IT");
         // Act
         String actual = amministratore.getSurname();
         // Assert

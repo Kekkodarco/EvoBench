@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="it">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>AMBER Results Dashboard</title>
+    <style>
+        :root{
+            --bg:#0b0f17; --panel:#121a27; --muted:#9fb0c7; --text:#e9f0ff;
+            --border:#24324a; --good:#2dd4bf; --bad:#fb7185; --warn:#fbbf24;
+            --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        }
+        body{ margin:0; font-family:var(--sans); background:var(--bg); color:var(--text); }
+        header{ padding:18px 20px; border-bottom:1px solid var(--border); background:linear-gradient(180deg,#0b0f17,#0b0f17 60%,#0a0d14); }
+        h1{ margin:0 0 6px 0; font-size:18px; }
+        .sub{ color:var(--muted); font-size:13px; }
+        main{ padding:18px 20px; display:grid; grid-template-columns: 320px 1fr; gap:16px; }
+        .card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; }
+        .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+        .btn{
+            background:#1b2a43; border:1px solid var(--border); color:var(--text);
+            padding:8px 10px; border-radius:10px; cursor:pointer; font-size:13px;
+        }
+        .btn:hover{ filter:brightness(1.1); }
+        input[type="file"]{ display:block; width:100%; margin-top:8px; color:var(--muted); }
+        select, input[type="text"]{
+            background:#0f1623; border:1px solid var(--border); color:var(--text);
+            padding:8px 10px; border-radius:10px; font-size:13px; width:100%;
+        }
+        .list{ margin-top:10px; max-height:62vh; overflow:auto; padding-right:6px; }
+        .item{
+            padding:10px; border:1px solid var(--border); border-radius:10px; cursor:pointer;
+            margin-bottom:8px; background:#0f1623;
+        }
+        .item:hover{ filter:brightness(1.1); }
+        .item.active{ outline:2px solid #3b82f6; }
+        .item .title{ font-size:13px; font-family:var(--mono); }
+        .item .meta{ font-size:12px; color:var(--muted); margin-top:4px; }
+        .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+        table{ width:100%; border-collapse:collapse; font-size:13px; }
+        th, td{ border-bottom:1px solid var(--border); padding:8px; vertical-align:top; }
+        th{ text-align:left; color:var(--muted); font-weight:600; }
+        td.mono{ font-family:var(--mono); font-size:12px; }
+        .pill{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid var(--border); color:var(--muted); }
+        .delta.good{ color:var(--good); font-weight:700; }
+        .delta.bad{ color:var(--bad); font-weight:700; }
+        .delta.neutral{ color:var(--muted); }
+        .kpi{ display:flex; gap:12px; flex-wrap:wrap; }
+        .kpi .box{ border:1px solid var(--border); background:#0f1623; border-radius:12px; padding:10px 12px; min-width:160px; }
+        .kpi .label{ color:var(--muted); font-size:12px; }
+        .kpi .value{ font-size:16px; margin-top:4px; font-family:var(--mono); }
+        .muted{ color:var(--muted); }
+        .small{ font-size:12px; }
+        .sep{ height:1px; background:var(--border); margin:12px 0; }
+        pre{
+            background:#0f1623; border:1px solid var(--border); border-radius:12px;
+            padding:10px; overflow:auto; color:#d6e3ff; font-size:12px; line-height:1.35;
+        }
+        canvas{ width:100%; height:240px; background:#0f1623; border:1px solid var(--border); border-radius:12px; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>AMBER Results Dashboard</h1>
+    <div class="sub">Seleziona la cartella <span class="pill">amber-results/by-benchmark</span> (o una sua sottocartella). La pagina indicizza added / modified / compare e mostra i risultati per classe di test.</div>
+</header>
+
+<main>
+    <section class="card">
+        <div class="row">
+            <button class="btn" id="btnClear">Reset</button>
+            <span class="pill" id="statusPill">nessuna cartella</span>
+        </div>
+
+        <input id="folderPicker" type="file" webkitdirectory multiple />
+
+        <div class="sep"></div>
+
+        <label class="muted small">Filtro (classe / test)</label>
+        <input id="searchBox" type="text" placeholder="es: TecnicoTest o utente.personale.TecnicoTest" />
+
+        <div class="sep"></div>
+
+        <div class="muted small">Classi indicizzate</div>
+        <div class="list" id="classList"></div>
+    </section>
+
+    <section class="card" id="detail">
+        <div class="muted">Carica una cartella per iniziare.</div>
+    </section>
+</main>
+
+<script>
+    /**
+     * Convenzioni usate (adattate al tuo esempio):
+     * - added_<commit>_<timestamp>.json        => JMH results array
+     * - modified_<commit>_<timestamp>.json     => JMH results array
+     * - compare_*.json                         => oggetto { prev_file, curr_file, comparisons:[...] ... }
+     *
+     * Indice per classe = folder che contiene i file:
+     * amber-results/by-benchmark/<package.class>/<package.TestClass>/
+     * quindi prendiamo il parent folder name come "TestClass folder", es: "utente.personale.TecnicoTest"
+     */
+
+    const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 3 });
+    const fmtInt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
+
+    function parseFileNameMeta(name){
+        // added_8127aa9_20260130_125412.json
+        const m = name.match(/^(added|modified)_([0-9a-fA-F]+)_(\d{8})_(\d{6})\.json$/);
+        if(!m) return null;
+        return { kind:m[1], commit:m[2], date:m[3], time:m[4] };
+    }
+    function isCompareFile(name){
+        return /^compare_.*\.json$/i.test(name);
+    }
+    function scoreFromJmhEntry(entry){
+        return entry?.primaryMetric?.score ?? null;
+    }
+    function shortBenchmark(bm){
+        // utente.personale.TecnicoTest._Benchmark.benchmark_testGetSurname_case1
+        // -> benchmark_testGetSurname_case1 (o testGetSurname_case1)
+        if(!bm) return "";
+        const last = bm.split(".").pop();
+        return last || bm;
+    }
+    function safePct(x){
+        if(x === null || x === undefined || Number.isNaN(x)) return "";
+        return (x >= 0 ? "+" : "") + fmt.format(x) + "%";
+    }
+    function deltaClass(deltaPct){
+        if(deltaPct === null || deltaPct === undefined || Number.isNaN(deltaPct)) return "neutral";
+        if(deltaPct <= -1) return "bad";      // soglia: regressione oltre 1%
+        if(deltaPct >= 1) return "good";      // miglioramento oltre 1%
+        return "neutral";
+    }
+
+    function drawBarChart(canvas, items){
+        // items: [{label, value}]
+        const ctx = canvas.getContext("2d");
+        const W = canvas.width = canvas.clientWidth * devicePixelRatio;
+        const H = canvas.height = canvas.clientHeight * devicePixelRatio;
+
+        ctx.clearRect(0,0,W,H);
+
+        // padding
+        const padL = 70 * devicePixelRatio;
+        const padR = 14 * devicePixelRatio;
+        const padT = 14 * devicePixelRatio;
+        const padB = 34 * devicePixelRatio;
+
+        const plotW = W - padL - padR;
+        const plotH = H - padT - padB;
+
+        // axes
+        ctx.strokeStyle = "#24324a";
+        ctx.lineWidth = 1 * devicePixelRatio;
+        ctx.beginPath();
+        ctx.moveTo(padL, padT);
+        ctx.lineTo(padL, padT + plotH);
+        ctx.lineTo(padL + plotW, padT + plotH);
+        ctx.stroke();
+
+        if(!items.length){
+            ctx.fillStyle = "#9fb0c7";
+            ctx.font = `${12*devicePixelRatio}px ui-sans-serif`;
+            ctx.fillText("Nessun dato", padL + 10*devicePixelRatio, padT + 20*devicePixelRatio);
+            return;
+        }
+
+        const maxV = Math.max(...items.map(x => x.value));
+        const barGap = 10 * devicePixelRatio;
+        const barW = Math.max(8*devicePixelRatio, (plotW - barGap*(items.length-1)) / items.length);
+
+        // ticks y (3)
+        ctx.fillStyle = "#9fb0c7";
+        ctx.font = `${11*devicePixelRatio}px ui-monospace`;
+        for(let i=0;i<=3;i++){
+            const v = maxV * (i/3);
+            const y = padT + plotH - (plotH*(i/3));
+            ctx.strokeStyle = "#1f2a3b";
+            ctx.beginPath();
+            ctx.moveTo(padL, y);
+            ctx.lineTo(padL + plotW, y);
+            ctx.stroke();
+
+            ctx.fillText(fmtInt.format(v), 8*devicePixelRatio, y + 4*devicePixelRatio);
+        }
+
+        // bars
+        items.forEach((it, idx) => {
+            const x = padL + idx*(barW+barGap);
+            const h = (it.value / maxV) * plotH;
+            const y = padT + plotH - h;
+
+            // bar
+            ctx.fillStyle = "#3b82f6";
+            ctx.fillRect(x, y, barW, h);
+
+            // label (rotated if long)
+            const label = it.label.length > 22 ? it.label.slice(0,22) + "…" : it.label;
+            ctx.save();
+            ctx.translate(x + barW/2, padT + plotH + 18*devicePixelRatio);
+            ctx.rotate(-0.45);
+            ctx.fillStyle = "#9fb0c7";
+            ctx.font = `${10*devicePixelRatio}px ui-monospace`;
+            ctx.textAlign = "center";
+            ctx.fillText(label, 0, 0);
+            ctx.restore();
+        });
+    }
+
+    // ----- indexing -----
+    let index = null;
+    let selectedKey = null;
+
+    document.getElementById("btnClear").addEventListener("click", () => {
+        index = null;
+        selectedKey = null;
+        document.getElementById("classList").innerHTML = "";
+        document.getElementById("detail").innerHTML = `<div class="muted">Carica una cartella per iniziare.</div>`;
+        document.getElementById("statusPill").textContent = "nessuna cartella";
+        document.getElementById("folderPicker").value = "";
+        document.getElementById("searchBox").value = "";
+    });
+
+    document.getElementById("folderPicker").addEventListener("change", async (e) => {
+        const files = Array.from(e.target.files || []);
+        if(!files.length) return;
+
+        document.getElementById("statusPill").textContent = `lettura file (${files.length})...`;
+
+        index = await buildIndex(files);
+
+        document.getElementById("statusPill").textContent =
+            `OK: ${Object.keys(index.classes).length} classi, ${index.counts.added} added, ${index.counts.modified} modified, ${index.counts.compare} compare`;
+
+        renderClassList();
+    });
+
+    document.getElementById("searchBox").addEventListener("input", () => renderClassList());
+
+    async function buildIndex(files){
+        // classes: key -> { key, folderPath, addedFiles[], modifiedFiles[], compareFiles[] }
+        const classes = {};
+        const counts = { added:0, modified:0, compare:0 };
+
+        // helper to get folder (relative path) and class key
+        function classKeyFromWebkitPath(p){
+            // p = amber-results/by-benchmark/utente.personale.Tecnico/utente.personale.TecnicoTest/added_x.json
+            const parts = p.split("/").filter(Boolean);
+            // key: take parent folder name (the test-class folder)
+            if(parts.length < 2) return null;
+            const parent = parts[parts.length - 2];
+            return parent; // utente.personale.TecnicoTest
+        }
+
+        // Read + index metadata only (we parse JSON later on demand)
+        for(const f of files){
+            const p = f.webkitRelativePath || f.name;
+            const key = classKeyFromWebkitPath(p);
+            if(!key) continue;
+
+            if(!classes[key]){
+                classes[key] = { key, files: [], added: [], modified: [], compare: [] };
+            }
+            classes[key].files.push({ file:f, path:p });
+
+            const meta = parseFileNameMeta(f.name);
+            if(meta){
+                if(meta.kind === "added"){ classes[key].added.push({ ...meta, file:f, path:p }); counts.added++; }
+                if(meta.kind === "modified"){ classes[key].modified.push({ ...meta, file:f, path:p }); counts.modified++; }
+                continue;
+            }
+            if(isCompareFile(f.name)){
+                classes[key].compare.push({ file:f, path:p });
+                counts.compare++;
+            }
+        }
+
+        // sort files per time
+        for(const k of Object.keys(classes)){
+            classes[k].added.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
+            classes[k].modified.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
+            classes[k].compare.sort((a,b) => a.path.localeCompare(b.path));
+        }
+
+        return { classes, counts };
+    }
+
+    function renderClassList(){
+        const list = document.getElementById("classList");
+        list.innerHTML = "";
+        if(!index) return;
+
+        const q = (document.getElementById("searchBox").value || "").toLowerCase().trim();
+        const keys = Object.keys(index.classes).sort();
+
+        const filtered = q ? keys.filter(k => k.toLowerCase().includes(q)) : keys;
+
+        filtered.forEach(k => {
+            const c = index.classes[k];
+            const div = document.createElement("div");
+            div.className = "item" + (selectedKey === k ? " active" : "");
+            div.innerHTML = `
+      <div class="title">${escapeHtml(k)}</div>
+      <div class="meta">added: ${c.added.length} · modified: ${c.modified.length} · compare: ${c.compare.length}</div>
+    `;
+            div.addEventListener("click", async () => {
+                selectedKey = k;
+                renderClassList();
+                await renderDetails(c);
+            });
+            list.appendChild(div);
+        });
+
+        if(filtered.length === 0){
+            list.innerHTML = `<div class="muted small">Nessun match.</div>`;
+        }
+    }
+
+    async function renderDetails(c){
+        const detail = document.getElementById("detail");
+        detail.innerHTML = `<div class="muted">Caricamento ${escapeHtml(c.key)}...</div>`;
+
+        // latest added + latest modified + latest compare (if any)
+        const latestAdded = c.added[c.added.length-1] || null;
+        const latestCompare = c.compare[c.compare.length-1] || null;
+
+        let addedData = null;
+        if(latestAdded){
+            addedData = await readJson(latestAdded.file);
+        }
+
+        let compareData = null;
+        if(latestCompare){
+            compareData = await readJson(latestCompare.file);
+        }
+
+        // KPI
+        const kpiHtml = `
+    <div class="kpi">
+      <div class="box">
+        <div class="label">Classe</div>
+        <div class="value">${escapeHtml(c.key)}</div>
+      </div>
+      <div class="box">
+        <div class="label">Added file più recente</div>
+        <div class="value">${latestAdded ? escapeHtml(latestAdded.commit) : "—"}</div>
+        <div class="muted small">${latestAdded ? `${latestAdded.date} ${latestAdded.time}` : ""}</div>
+      </div>
+      <div class="box">
+        <div class="label">Compare disponibile</div>
+        <div class="value">${latestCompare ? "Sì" : "No"}</div>
+      </div>
+    </div>
+  `;
+
+        // Added table
+        let addedTable = `<div class="muted">Nessun added_*.json trovato per questa classe.</div>`;
+        let addedChartItems = [];
+        if(Array.isArray(addedData)){
+            const rows = addedData.map(r => ({
+                benchmark: r.benchmark,
+                short: shortBenchmark(r.benchmark),
+                score: scoreFromJmhEntry(r),
+                unit: r?.primaryMetric?.scoreUnit || "ops/s"
+            })).filter(x => x.score !== null);
+
+            // sort desc by score
+            rows.sort((a,b) => b.score - a.score);
+
+            addedChartItems = rows.slice(0, 12).map(x => ({ label: x.short, value: x.score }));
+
+            addedTable = `
+      <div class="row" style="justify-content:space-between;align-items:flex-end;">
+        <div>
+          <div style="font-weight:700;">Added (velocità media)</div>
+          <div class="muted small">Score = primaryMetric.score (${rows[0]?.unit || "ops/s"})</div>
+        </div>
+        <span class="pill">file: ${latestAdded ? escapeHtml(latestAdded.file.name) : "—"}</span>
+      </div>
+      <div class="sep"></div>
+      <canvas id="addedChart"></canvas>
+      <div class="sep"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>Score</th>
+            <th>Unità</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(x => `
+            <tr>
+              <td class="mono">${escapeHtml(x.short)}</td>
+              <td class="mono">${fmt.format(x.score)}</td>
+              <td>${escapeHtml(x.unit)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+        }
+
+        // Compare table (Modified)
+        let compareTable = `<div class="muted">Nessun compare_*.json trovato per questa classe (serve almeno 2 run “modified” per generarlo).</div>`;
+        if(compareData && typeof compareData === "object"){
+            const comps = Array.isArray(compareData.comparisons) ? compareData.comparisons : [];
+            compareTable = `
+      <div class="row" style="justify-content:space-between;align-items:flex-end;">
+        <div>
+          <div style="font-weight:700;">Modified (confronto prev/curr)</div>
+          <div class="muted small">Delta% negativo = più lento (regressione)</div>
+        </div>
+        <span class="pill">file: ${latestCompare ? escapeHtml(latestCompare.file.name) : "—"}</span>
+      </div>
+      <div class="sep"></div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>Prev</th>
+            <th>Curr</th>
+            <th>Δ%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${comps.map(x => {
+                const d = x.delta_pct;
+                const d100 = (typeof d === "number") ? (d) : null;
+                const cls = deltaClass(d100);
+                return `
+              <tr>
+                <td class="mono">${escapeHtml(shortBenchmark(x.benchmark))}</td>
+                <td class="mono">${fmt.format(x.prev)}</td>
+                <td class="mono">${fmt.format(x.curr)}</td>
+                <td class="mono delta ${cls}">${safePct(d100)}</td>
+              </tr>
+            `;
+            }).join("")}
+        </tbody>
+      </table>
+
+      <div class="sep"></div>
+      <div class="muted small">Dettagli (raw compare json)</div>
+      <pre>${escapeHtml(JSON.stringify(compareData, null, 2))}</pre>
+    `;
+        }
+
+        // History quick list
+        const hist = `
+    <div class="grid2">
+      <div class="card" style="padding:12px;">
+        <div style="font-weight:700;">Storico added</div>
+        <div class="muted small">clicca per aprire il raw JSON qui sotto</div>
+        <div class="sep"></div>
+        ${c.added.length ? c.added.slice().reverse().slice(0,8).map(x =>
+            `<button class="btn" data-open="added" data-name="${escapeHtml(x.file.name)}">${escapeHtml(x.commit)} · ${x.date} ${x.time}</button>`
+        ).join(" ") : `<div class="muted small">—</div>`}
+      </div>
+      <div class="card" style="padding:12px;">
+        <div style="font-weight:700;">Storico compare</div>
+        <div class="muted small">clicca per aprire il raw JSON qui sotto</div>
+        <div class="sep"></div>
+        ${c.compare.length ? c.compare.slice().reverse().slice(0,8).map(x =>
+            `<button class="btn" data-open="compare" data-name="${escapeHtml(x.file.name)}">${escapeHtml(x.file.name)}</button>`
+        ).join(" ") : `<div class="muted small">—</div>`}
+      </div>
+    </div>
+    <div class="sep"></div>
+    <div class="muted small">Raw viewer</div>
+    <pre id="rawViewer">(seleziona un file dallo storico)</pre>
+  `;
+
+        detail.innerHTML = `
+    ${kpiHtml}
+    <div class="sep"></div>
+    <div class="grid2">
+      <div class="card" style="padding:12px;">${addedTable}</div>
+      <div class="card" style="padding:12px;">${compareTable}</div>
+    </div>
+    <div class="sep"></div>
+    ${hist}
+  `;
+
+        // draw chart if present
+        const canvas = document.getElementById("addedChart");
+        if(canvas && addedChartItems.length){
+            drawBarChart(canvas, addedChartItems);
+        }
+
+        // wire history buttons
+        detail.querySelectorAll("button[data-open]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const kind = btn.getAttribute("data-open");
+                const name = btn.getAttribute("data-name");
+                const entry = findFileByName(c, kind, name);
+                if(!entry) return;
+
+                const data = await readJson(entry.file);
+                document.getElementById("rawViewer").textContent = JSON.stringify(data, null, 2);
+            });
+        });
+    }
+
+    function findFileByName(c, kind, name){
+        if(kind === "added"){
+            return c.added.find(x => x.file.name === name) || null;
+        }
+        if(kind === "compare"){
+            return c.compare.find(x => x.file.name === name) || null;
+        }
+        return null;
+    }
+
+    async function readJson(file){
+        const txt = await file.text();
+        return JSON.parse(txt);
+    }
+
+    function escapeHtml(s){
+        return String(s)
+            .replaceAll("&","&amp;")
+            .replaceAll("<","&lt;")
+            .replaceAll(">","&gt;")
+            .replaceAll('"',"&quot;")
+            .replaceAll("'","&#039;");
+    }
+</script>
+</body>
+</html>

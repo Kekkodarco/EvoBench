@@ -2,82 +2,70 @@ package utente;
 
 import static org.junit.Assert.*;
 
+
+
+
+
 import banca.ContoBancario;
 import listener.JacocoCoverageListener;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mockito;
-import utente.personale.Amministratore;
+import listener.BaseCoverageTest;
 
-public class UtenteTest {
+public class UtenteTest  extends BaseCoverageTest {
 
-    private Utente utente;
+private Utente utente;
 
     @Before
-    public void setUp() {
-        ContoBancario mockContoBancario = Mockito.mock(ContoBancario.class);
-        utente = new Utente("John", "Doe", "123", "via mazzini", mockContoBancario);
+public void setUp() {
+ContoBancario mockContoBancario = Mockito.mock(ContoBancario.class);
+utente = new Utente("John", "Doe", "123", "via mazzini", mockContoBancario);
+    }
+
+
+    @Test
+public void testGetTelephone() {
+assertEquals("123", utente.getTelephone());
     }
 
     @Test
-    public void testGetSurname() {
-        assertEquals("Doe", utente.getSurname());
+public void testGetAddress() {
+assertEquals("via mazzini", utente.getAddress(1));
     }
 
     @Test
-    public void testSetSurname() {
+public void testGetContoBancario() {
+assertNotNull(utente.getContoBancario());
+    }
+
+    @Test
+public void testGetName_case1() {
         // Arrange
-        Utente utente = new Utente(
-                "John",
-                "Smith",
-                "1234567890",
-                "Main Street 123",
-                null
-        );
+String expected = "John Doe";
+Utente utente = new Utente(expected, "Doe", "555-1234", "123 Main St.", null);
 
         // Act
-        utente.setSurname("Doe");
+String actual = utente.getName();
 
         // Assert
-        assertEquals("Doe", utente.getSurname());
+assertEquals("getName() should return the name", expected, actual);
     }
 
-    @Test
-    public void testGetTelephone() {
-        assertEquals("123", utente.getTelephone());
-    }
 
     @Test
-    public void testGetAddress() {
-        assertEquals("via mazzini", utente.getAddress(1));
-    }
-
-    @Test
-    public void testGetContoBancario() {
-        assertNotNull(utente.getContoBancario());
-    }
-
-    @Test
-    public void testGetName() {
+public void testSetTelephone_case1() {
         // Arrange
-        String name = "John";
-        String surname = "Doe";
-        String telephone = "+39 1234567890";
-        String address = "Via Roma, 10";
-        ContoBancario contoBancario = new ContoBancario();
-        Utente utente = new Utente(name, surname, telephone, address, contoBancario);
+String expectedTelephone = "1234567890";
+Utente utente = new Utente("John", "Doe", "1234567890", "Somewhere, Italy", null);
 
         // Act
-        String result = utente.getName();
+utente.setTelephone(expectedTelephone);
 
         // Assert
-        assertEquals("John", result);
+String actualTelephone = utente.getTelephone();
+assertEquals("The telephone should be set correctly.", expectedTelephone, actualTelephone);
     }
-
-
-
-
-
 
 }

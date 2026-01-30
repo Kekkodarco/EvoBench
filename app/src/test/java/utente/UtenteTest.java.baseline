@@ -3,8 +3,6 @@ package utente;
 import static org.junit.Assert.*;
 
 
-
-
 import banca.ContoBancario;
 import listener.JacocoCoverageListener;
 import org.junit.Before;
@@ -13,7 +11,7 @@ import org.junit.Test;
 import org.mockito.Mockito;
 import listener.BaseCoverageTest;
 
-public class UtenteTest  extends BaseCoverageTest {
+public class UtenteTest extends BaseCoverageTest {
 
 private Utente utente;
 
@@ -22,7 +20,6 @@ public void setUp() {
 ContoBancario mockContoBancario = Mockito.mock(ContoBancario.class);
 utente = new Utente("John", "Doe", "123", "via mazzini", mockContoBancario);
     }
-
 
     @Test
 public void testGetTelephone() {
@@ -47,34 +44,11 @@ assertNotNull(utente.getContoBancario());
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     @Test
 public void testGetName_case1() {
-        // Arrange
-String expected = "John Doe";
-Utente utente = new Utente(expected, "Doe", "555-1234", "123 Main St.", null);
-
-        // Act
-String actual = utente.getName();
-
-        // Assert
-assertEquals("getName() should return the name", expected, actual);
+        // assert that the name is correctly set
+assertEquals("John", utente.getName());
     }
-
 
 
 
