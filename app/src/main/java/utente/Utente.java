@@ -52,7 +52,5 @@ public class Utente {
         this.contoBancario = contoBancario;
     }
 
-    public void setTelephone(String telephone) {
-        this.telephone = telephone;
-    }
+
 }
