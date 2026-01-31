@@ -14,7 +14,9 @@ public class Tecnico {
         this.code = code;
     }
 
-    public String getName() {return name;}
+    public String getName() {
+        System.out.println("1");
+        return name;}
 
     public String getSurname() {
         System.out.println("ww");
