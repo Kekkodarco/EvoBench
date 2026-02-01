@@ -19,7 +19,6 @@ public class Utente {
     }
 
     public String getName() {
-        System.out.println("dddddd");
         return name;
     }
 
