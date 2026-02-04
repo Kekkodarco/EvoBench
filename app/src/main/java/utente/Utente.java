@@ -33,7 +33,7 @@ public class Utente {
     }
 
     public String getAddress(int a) {
-        int b=a;
+        int c=a;
         return address;
     }
 
