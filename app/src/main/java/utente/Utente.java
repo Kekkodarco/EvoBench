@@ -51,8 +51,6 @@ public class Utente {
         this.contoBancario = contoBancario;
     }
 
-    public void telefono(String telephone) {
-        this.telephone = telephone;
-    }
+
 
 }
