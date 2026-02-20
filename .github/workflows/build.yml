@@ -25,6 +25,8 @@ jobs:
       - name: Setup Gradle
         uses: eskatos/gradle-command-action@v1
         with:
+          arguments: build
+          cache-disabled: true
           gradle-version: '7.4.2'  # Specifica la versione di Gradle da utilizzare
 
       - name: Set execute permission for gradlew

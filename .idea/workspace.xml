@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="4cc465a9-48fc-4272-a0d1-39b296406615" name="Changes" comment="" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ExternalProjectsData">
+    <projectState path="$PROJECT_DIR$">
+      <ProjectState />
+    </projectState>
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+        <option value="HTML File" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="feature" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;Kekkodarco&quot;
+  }
+}</component>
+  <component name="GitToolBoxStore">
+    <option name="recentBranches">
+      <RecentBranches>
+        <option name="branchesForRepo">
+          <list>
+            <RecentBranchesForRepo>
+              <option name="branches">
+                <list>
+                  <RecentBranch>
+                    <option name="branchName" value="main" />
+                    <option name="lastUsedInstant" value="1771606498" />
+                  </RecentBranch>
+                  <RecentBranch>
+                    <option name="branchName" value="feature-ultimateCheck" />
+                    <option name="lastUsedInstant" value="1765482467" />
+                  </RecentBranch>
+                  <RecentBranch>
+                    <option name="branchName" value="feature" />
+                    <option name="lastUsedInstant" value="1758548890" />
+                  </RecentBranch>
+                </list>
+              </option>
+              <option name="repositoryRootUrl" value="file://$PROJECT_DIR$" />
+            </RecentBranchesForRepo>
+          </list>
+        </option>
+      </RecentBranches>
+    </option>
+  </component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/Kekkodarco/EvoBench.git&quot;,
+    &quot;accountId&quot;: &quot;b4e5e27c-d9f6-438a-b98d-cf199e2797b5&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 8
+}</component>
+  <component name="ProjectId" id="3339faKNMpYgvJcGHHmajtmV9IT" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;Gradle.GradleProject:app [:app:ASTGenerator.main()].executor&quot;: &quot;Run&quot;,
+    &quot;JavaScript Debug.dashboard.html.executor&quot;: &quot;Run&quot;,
+    &quot;JavaScript Debug.report_added_latest.html.executor&quot;: &quot;Run&quot;,
+    &quot;JavaScript Debug.report_modified_latest.html.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;Shell Script.modified_classes_detector.sh.executor&quot;: &quot;Run&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/franc/IdeaProjects/EvoBench&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;Modules&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.17148554&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.intellij.python.templateLanguages.PyTemplateLanguageModulesConfigurable&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RunManager" selected="JavaScript Debug.report_added_latest.html">
+    <configuration name="dashboard.html" type="JavascriptDebugType" temporary="true" nameIsGenerated="true" uri="http://localhost:63342/GradleProject/amber-results/dashboard.html" useBuiltInWebServerPort="true">
+      <method v="2" />
+    </configuration>
+    <configuration name="report_added_latest.html" type="JavascriptDebugType" temporary="true" nameIsGenerated="true" uri="http://localhost:63342/GradleProject/amber-results/by-benchmark/utente.Utente/utente.UtenteTest/report_added_latest.html" useBuiltInWebServerPort="true">
+      <method v="2" />
+    </configuration>
+    <configuration name="report_modified_latest.html" type="JavascriptDebugType" temporary="true" nameIsGenerated="true" uri="http://localhost:63342/GradleProject/amber-results/by-benchmark/utente.Utente/utente.UtenteTest/report_modified_latest.html" useBuiltInWebServerPort="true">
+      <method v="2" />
+    </configuration>
+    <configuration name="modified_classes_detector.sh" type="ShConfigurationType">
+      <option name="SCRIPT_TEXT" value="" />
+      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+      <option name="SCRIPT_PATH" value="$PROJECT_DIR$/modified_classes_detector.sh" />
+      <option name="SCRIPT_OPTIONS" value="" />
+      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="INDEPENDENT_INTERPRETER_PATH" value="false" />
+      <option name="INTERPRETER_PATH" value="$PROJECT_DIR$/../../../../Program Files/Git/bin/bash.exe" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="EXECUTE_IN_TERMINAL" value="true" />
+      <option name="EXECUTE_SCRIPT_FILE" value="true" />
+      <envs />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="JavaScript Debug.report_added_latest.html" />
+        <item itemvalue="JavaScript Debug.report_modified_latest.html" />
+        <item itemvalue="JavaScript Debug.dashboard.html" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-9823dce3aa75-125ca727e0f0-intellij.indexing.shared.core-IU-243.23654.117" />
+        <option value="bundled-js-predefined-d6986cc7102b-822845ee3bb5-JavaScript-IU-243.23654.117" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="4cc465a9-48fc-4272-a0d1-39b296406615" name="Changes" comment="" />
+      <created>1758534992862</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1758534992862</updated>
+      <workItem from="1758534993941" duration="4725000" />
+      <workItem from="1758554424074" duration="702000" />
+      <workItem from="1758722479077" duration="3516000" />
+      <workItem from="1758812497427" duration="631000" />
+      <workItem from="1758881252544" duration="1006000" />
+      <workItem from="1759135919862" duration="2669000" />
+      <workItem from="1759845506457" duration="595000" />
+      <workItem from="1759932618486" duration="3515000" />
+      <workItem from="1760025723257" duration="592000" />
+      <workItem from="1760182615915" duration="5831000" />
+      <workItem from="1760346033748" duration="2198000" />
+      <workItem from="1762704916776" duration="1717000" />
+      <workItem from="1762873526927" duration="1370000" />
+      <workItem from="1762957453545" duration="23000" />
+      <workItem from="1763983664277" duration="1125000" />
+      <workItem from="1763996495411" duration="55000" />
+      <workItem from="1763999603289" duration="384000" />
+      <workItem from="1765478257967" duration="8460000" />
+      <workItem from="1765529854460" duration="1548000" />
+      <workItem from="1765557684537" duration="1855000" />
+      <workItem from="1765620508033" duration="2413000" />
+      <workItem from="1765731914797" duration="865000" />
+      <workItem from="1765807759578" duration="3709000" />
+      <workItem from="1765885949523" duration="3103000" />
+      <workItem from="1765896894090" duration="6445000" />
+      <workItem from="1765983488911" duration="6588000" />
+      <workItem from="1766055019677" duration="13306000" />
+      <workItem from="1766139171960" duration="3150000" />
+      <workItem from="1766146874734" duration="4892000" />
+      <workItem from="1766224627896" duration="11951000" />
+      <workItem from="1766245534311" duration="233000" />
+      <workItem from="1766333411685" duration="5127000" />
+      <workItem from="1766400490821" duration="737000" />
+      <workItem from="1766434764115" duration="927000" />
+      <workItem from="1766481015843" duration="7965000" />
+      <workItem from="1766589933120" duration="6180000" />
+      <workItem from="1766654364432" duration="3371000" />
+      <workItem from="1766934176251" duration="5866000" />
+      <workItem from="1767786339459" duration="4857000" />
+      <workItem from="1768054888429" duration="10794000" />
+      <workItem from="1768150119650" duration="5927000" />
+      <workItem from="1768237918418" duration="9887000" />
+      <workItem from="1768310811498" duration="10158000" />
+      <workItem from="1768391046542" duration="14281000" />
+      <workItem from="1768478863087" duration="14025000" />
+      <workItem from="1768559062392" duration="5576000" />
+      <workItem from="1768579057133" duration="12227000" />
+      <workItem from="1768644256730" duration="8004000" />
+      <workItem from="1768729708957" duration="18123000" />
+      <workItem from="1768810760015" duration="8244000" />
+      <workItem from="1768838038645" duration="7963000" />
+      <workItem from="1768901753669" duration="5834000" />
+      <workItem from="1768920496190" duration="12396000" />
+      <workItem from="1768943622634" duration="282000" />
+      <workItem from="1768989005495" duration="21504000" />
+      <workItem from="1769076358441" duration="8145000" />
+      <workItem from="1769094465164" duration="665000" />
+      <workItem from="1769097773785" duration="1169000" />
+      <workItem from="1769106004562" duration="576000" />
+      <workItem from="1769158284223" duration="243000" />
+      <workItem from="1769198211324" duration="1988000" />
+      <workItem from="1769263288186" duration="3191000" />
+      <workItem from="1769373865260" duration="2689000" />
+      <workItem from="1769533943061" duration="10301000" />
+      <workItem from="1769616022342" duration="7243000" />
+      <workItem from="1769684173780" duration="6897000" />
+      <workItem from="1769771469831" duration="3778000" />
+      <workItem from="1769785322636" duration="8915000" />
+      <workItem from="1769850288395" duration="14388000" />
+      <workItem from="1769952299197" duration="1701000" />
+      <workItem from="1769964864915" duration="543000" />
+      <workItem from="1769965426846" duration="1074000" />
+      <workItem from="1769966539510" duration="3479000" />
+      <workItem from="1770052667857" duration="6407000" />
+      <workItem from="1770135585926" duration="7882000" />
+      <workItem from="1770198495820" duration="4624000" />
+      <workItem from="1771604906654" duration="914000" />
+      <workItem from="1771605857887" duration="28000" />
+      <workItem from="1771606005142" duration="1867000" />
+      <workItem from="1771607929183" duration="753000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
+  </component>
+</project>
