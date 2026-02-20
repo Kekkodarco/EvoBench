@@ -47,6 +47,18 @@ public class TecnicoTest extends BaseCoverageTest {
         assertEquals(expected, tecnico.getSurname());
     }
 
+    @Test
+    public void testGetName_case1() {
+        assertEquals("John", tecnico.getName());
+    }
+
+    @Test
+    public void testSetName_case1() {
+        String newName = "Jane";
+        tecnico.setName(newName);
+        assertEquals(newName, tecnico.getName());
+    }
+
     @org.openjdk.jmh.annotations.State(org.openjdk.jmh.annotations.Scope.Thread)
     public static class _Benchmark extends listener.BaseCoverageTest._Benchmark {
 
@@ -66,6 +78,18 @@ public class TecnicoTest extends BaseCoverageTest {
         public void benchmark_testSetSurname_case1() throws java.lang.Throwable {
             this.createImplementation();
             this.runBenchmark(this.implementation()::testSetSurname_case1, this.description("testSetSurname_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testGetName_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testGetName_case1, this.description("testGetName_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testSetName_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testSetName_case1, this.description("testSetName_case1"));
         }
 
         @java.lang.Override

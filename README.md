@@ -1,54 +1,123 @@
-Using: java 17.0.10 e gradle 7.4.2
+EvoBench – Technical Test Scenario for Incremental Benchmarking Pipeline
 
-New Gradle Project using Kotlin language
-Make 2 subproject:
-GradleProject
-|--app (build.gradle.kts must have the right dependencies for junit 4.13.2)
-|----src/main/java/(containing packages of classes)
-|----src/test/java/(containing packages of test classes)
-|--ju2jmh
-|----src/jmh/java/(containing packages of benchmarks)
-|----src/main/java/
-|----src/test/java/
+1. Overview
 
-the ju2jmh/src/jmh/java and ju2jmh/src/jmh/resources folders must be created by hand, 
-then run the build.gradle.kts (using id("me.champeau.jmh") version "0.6.6" as plugin and the needed dependencies)
-packages must have the same name and be organized the same way for each module
+This repository represents a controlled experimental environment used to
+test and validate an automated incremental pipeline for performance
+benchmarking of Java applications.
 
-build GradleProject (In the Target Project Root):
-gradle build
+The project itself is NOT the pipeline. Instead, it acts as a sandbox
+Gradle project where the pipeline is executed, verified, debugged, and
+refined.
 
-remove existent benchmarks (In the Target Project Root):
-rm -r ju2jmh/src/jmh/java/*
+The pipeline automatically: - Detects incremental code changes between
+commits - Regenerates affected unit tests - Converts tests into JMH
+microbenchmarks - Tracks code coverage - Executes and analyzes
+benchmarks - Exports structured performance results
 
-re-build GradleProject (In the Target Project Root):
-gradle clean
-gradle build
+This repository is therefore a testing scenario used during the
+internship activity for validating the full workflow.
 
-Build the ju2jmh tool (In the Tool Root):
-gradle build
+------------------------------------------------------------------------
 
-run generation
-gradle converter:run --args="/Users/antoniotrovato/Documents/GitHub/GradleProject/app/src/test/java/ /Users/antoniotrovato/Documents/GitHub/GradleProject/app/build/classes/java/test/ /Users/antoniotrovato/Documents/GitHub/GradleProject/ju2jmh/src/jmh/java/ banca.ContoBancarioTest"
-or
-gradle converter:run --args="/Users/antoniotrovato/Documents/GitHub/GradleProject/app/src/test/java/ /Users/antoniotrovato/Documents/GitHub/GradleProject/app/build/classes/java/test/ /Users/antoniotrovato/Documents/GitHub/GradleProject/ju2jmh/src/jmh/java/ --class-names-file=/Users/antoniotrovato/Documents/GitHub/GradleProject/app/build/classes/java/test/test-classes.txt"
-run generator by jar
-java -jar /Users/antoniotrovato/Documents/GitHub/GradleProject/ju-to-jmh/converter-all.jar /Users/antoniotrovato/Documents/GitHub/GradleProject/app/src/test/java/ /Users/antoniotrovato/Documents/GitHub/GradleProject/app/build/classes/java/test/ /Users/antoniotrovato/Documents/GitHub/GradleProject/ju2jmh/src/jmh/java/ banca.ContoBancarioTest
+2. Incremental Pipeline Logic
 
-build benchmarks (In the Target Project Root):
-gradle jmhJar
+At each commit i, the pipeline performs the following steps:
 
-list available benchmarks:
-java -jar /Users/antoniotrovato/Documents/GitHub/GradleProject/ju2jmh/build/libs/ju2jmh-jmh.jar -l
+STEP 1 – Change Detection - Execute git diff between commit i and commit
+(i-1) - Extract modified, added, and deleted production classes - Ignore
+non-production code
 
-run benchmarks (first way):
-use the jmh task in the gradle menu under ju2jmh opening GradleProject with IntelliJ
+STEP 2 – AST-Based Method Analysis - Send changed classes to the
+ASTGenerator - Identify: * Added methods * Modified methods * Deleted
+methods
 
-run a single benchmark
-java -jar /Users/antoniotrovato/Documents/GitHub/GradleProject/ju2jmh/build/libs/ju2jmh-jmh.jar banca.ContoBancarioTest._Benchmark.benchmark_testVersamento
+STEP 3 – Test Management
 
-run the benchmarks (second way + json results file gen):
-java -jar /Users/antoniotrovato/Documents/GitHub/GradleProject/ju2jmh/build/libs/ju2jmh-jmh.jar -f 1 -wi 0 -i 1 -r 100ms -foe true -rf json
+For Modified Methods: - Query the Coverage-Matrix to retrieve covering
+test cases - Delete outdated tests - Regenerate tests using
+Chat2UnitTest - Validate generated tests through execution
 
-rename the results json file (find a generic way!!)
-mv jmh-result.json jmh-result_prev.json
+For Added Methods: - Generate new test cases via Chat2UnitTest - Update
+Coverage-Matrix - Validate generated tests
+
+For Deleted Methods: - Remove associated test cases using
+Coverage-Matrix mapping
+
+Failure Condition: If at least one required test cannot be correctly
+generated after 10 attempts, the pipeline fails and only the original
+commit is pushed.
+
+------------------------------------------------------------------------
+
+3.  Test-to-Benchmark Conversion
+
+Validated functional tests are converted into JMH microbenchmarks using
+Ju2Jmh.
+
+Naming conventions allow traceability between: - Production method -
+Functional test - Generated microbenchmark
+
+This enables performance tracking at method granularity.
+
+------------------------------------------------------------------------
+
+4.  Code Coverage Tracking
+
+The project integrates JaCoCo for coverage instrumentation.
+
+Components involved: - Gradle JaCoCo plugin - JaCoCo Agent -
+JacocoCoverageListener
+
+The Coverage-Matrix maintains a persistent mapping between: - Production
+methods - Test cases - Microbenchmarks
+
+------------------------------------------------------------------------
+
+5.  Benchmark Execution and Analysis
+
+Generated microbenchmarks can be analyzed using AMBER.
+
+Outputs: - JSON result files - Performance comparison between commit
+versions - Optional visualization layer
+
+------------------------------------------------------------------------
+
+6.  Secondary Pipeline
+
+A secondary simplified pipeline periodically: - Executes the entire test
+suite - Regenerates the full Coverage-Matrix
+
+This ensures consistency over time and prevents drift.
+
+------------------------------------------------------------------------
+
+7.  Technologies
+
+-   Java
+-   Gradle
+-   Git
+-   JaCoCo
+-   JMH
+-   Chat2UnitTest
+-   Ju2Jmh
+-   AMBER
+-   Docker
+-   ngrok
+-   LM Studio
+
+------------------------------------------------------------------------
+
+8.  Nature of the Repository
+
+This project is a controlled toy example used to simulate realistic
+software evolution scenarios.
+
+It is designed exclusively for:
+
+-   Experimental validation
+-   Incremental analysis testing
+-   Integration debugging
+-   Research and internship development activities
+
+It is not intended to represent a production system.

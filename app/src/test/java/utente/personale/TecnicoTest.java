@@ -3,6 +3,7 @@ package utente.personale;
 import static org.junit.Assert.*;
 
 
+
 import listener.JacocoCoverageListener;
 import org.junit.Before;
 import org.junit.Rule;
@@ -58,6 +59,24 @@ tecnico.setSurname(expected);
 
         // Assert
 assertEquals(expected, tecnico.getSurname());
+    }
+
+
+
+
+
+
+
+    @Test
+public void testGetName_case1() {
+assertEquals("John", tecnico.getName());
+    }
+
+@Test
+public void testSetName_case1() {
+String newName = "Jane";
+tecnico.setName(newName);
+assertEquals(newName, tecnico.getName());
     }
 
 

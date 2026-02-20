@@ -1,0 +1,8 @@
+kind=modified
+sha=ac26f57
+ts=20260131_114523
+prod_class=utente.Utente
+test_class=utente.UtenteTest
+include_pat=^utente\.UtenteTest\._Benchmark\..*
+json=/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.Utente/utente.UtenteTest/modified_ac26f57_20260131_114523.json
+log=/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.Utente/utente.UtenteTest/modified_ac26f57_20260131_114523.log

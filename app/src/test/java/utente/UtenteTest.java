@@ -2,7 +2,6 @@ package utente;
 
 import static org.junit.Assert.*;
 
-
 import banca.ContoBancario;
 import listener.JacocoCoverageListener;
 import org.junit.Before;
@@ -22,32 +21,27 @@ utente = new Utente("John", "Doe", "123", "via mazzini", mockContoBancario);
     }
 
     @Test
-public void testGetTelephone() {
-assertEquals("123", utente.getTelephone());
-    }
-
-    @Test
-public void testGetAddress() {
-assertEquals("via mazzini", utente.getAddress(1));
-    }
-
-    @Test
-public void testGetContoBancario() {
-assertNotNull(utente.getContoBancario());
-    }
-
-
-
-
-
-
-
-
-
-    @Test
 public void testGetName_case1() {
-        // assert that the name is correctly set
-assertEquals("John", utente.getName());
+        // Arrange
+String expected = "John";
+Utente utente = new Utente(expected, null, null, null, null);
+        // Act
+String actual = utente.getName();
+        // Assert
+assertEquals(expected, actual);
+    }
+
+
+    @Test
+public void testGetAddress_case1() {
+        // Arrange
+Utente utente = new Utente("", "", "", "", null);
+
+        // Act
+String address = utente.getAddress(0);
+
+        // Assert
+assertEquals("", address);
     }
 
 

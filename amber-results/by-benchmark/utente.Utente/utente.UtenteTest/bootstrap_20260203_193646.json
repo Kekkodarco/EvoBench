@@ -1,0 +1,50 @@
+[
+  {
+    "benchmark": "utente.UtenteTest._Benchmark.benchmark_testGetAddress_case1",
+    "delta_pct": -2.4510901646714958,
+    "bootstrap": {
+      "ok": true,
+      "iters": 5000,
+      "ci95": [
+        -3.4484737555354528,
+        -1.4970994382046816
+      ],
+      "p_two_sided": 0.0,
+      "verdict": "IMPROVEMENT",
+      "n": 5000
+    },
+    "verdict": "REGRESSION"
+  },
+  {
+    "benchmark": "utente.UtenteTest._Benchmark.benchmark_testGetName_case1",
+    "delta_pct": 4.920192106280825,
+    "bootstrap": {
+      "ok": true,
+      "iters": 5000,
+      "ci95": [
+        4.0380830839509,
+        5.790929584475506
+      ],
+      "p_two_sided": 0.0,
+      "verdict": "REGRESSION",
+      "n": 5000
+    },
+    "verdict": "IMPROVEMENT"
+  },
+  {
+    "benchmark": "utente.UtenteTest._Benchmark.benchmark_testTelefono_case1",
+    "delta_pct": 5.634580035159125,
+    "bootstrap": {
+      "ok": true,
+      "iters": 5000,
+      "ci95": [
+        4.81027411056825,
+        6.495676344821437
+      ],
+      "p_two_sided": 0.0,
+      "verdict": "REGRESSION",
+      "n": 5000
+    },
+    "verdict": "IMPROVEMENT"
+  }
+]

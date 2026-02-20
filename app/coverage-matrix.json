@@ -1,6 +1,5 @@
 {
   "utente.UtenteTest.testGetContoBancario" : [ "utente.Utente.Utente", "utente.Utente.getContoBancario" ],
-  "utente.UtenteTest.testGetAddress" : [ "utente.Utente.Utente", "utente.Utente.getAddress" ],
   "utente.UtenteTest.testSetContoBancario" : [ "utente.Utente.Utente", "utente.Utente.setContoBancario", "utente.Utente.getContoBancario" ],
   "utente.UtenteTest.testSetName" : [ "utente.Utente.Utente", "utente.Utente.setName" ],
   "utente.UtenteTest.testGetTelephone" : [ "utente.Utente.Utente", "utente.Utente.getTelephone" ],
@@ -9,13 +8,9 @@
   "utente.personale.TecnicoTest.testGetProfession" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getProfession" ],
   "utente.personale.TecnicoTest.testSetProfession" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.setProfession", "utente.personale.Tecnico.getProfession" ],
   "utente.personale.TecnicoTest.testSetCode" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.setCode", "utente.personale.Tecnico.getCode" ],
-  "utente.personale.TecnicoTest.testGetName" : [ "utente.personale.Tecnico.getName", "utente.personale.Tecnico.Tecnico" ],
   "utente.personale.TecnicoTest.testGetProfession_case1" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getProfession" ],
   "utente.personale.TecnicoTest.testGetProfession_case2" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getProfession" ],
   "utente.personale.TecnicoTest.testGetProfession_case3" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getProfession" ],
-  "utente.personale.TecnicoTest.testGetName_case1" : [ "utente.personale.Tecnico.getName", "utente.personale.Tecnico.Tecnico" ],
-  "utente.personale.TecnicoTest.testSetName_case1" : [ "utente.personale.Tecnico.getName", "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.setName" ],
-  "utente.personale.TecnicoTest.testSetName_case2" : [ "utente.personale.Tecnico.getName", "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.setName" ],
   "utente.UtenteTest.testSetSurname_case1" : [ "utente.Utente.Utente", "utente.Utente.getSurname", "utente.Utente.setSurname" ],
   "utente.UtenteTest.testGetSurname_case1" : [ "utente.Utente.Utente", "utente.Utente.getSurname" ],
   "utente.personale.AmministratoreTest.testGetName" : [ "utente.personale.Amministratore.getName", "utente.personale.Amministratore.Amministratore" ],
@@ -26,5 +21,8 @@
   "utente.personale.TecnicoTest.testCalcolo_case1" : [ "utente.personale.Tecnico.calcolo", "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getCode" ],
   "utente.personale.TecnicoTest.testSetSurname_case1" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getSurname", "utente.personale.Tecnico.setSurname" ],
   "utente.personale.TecnicoTest.testGetSurname_case1" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getSurname" ],
-  "utente.UtenteTest.testGetName_case1" : [ "utente.Utente.Utente", "utente.Utente.getName" ]
+  "utente.personale.TecnicoTest.testGetName_case1" : [ "utente.personale.Tecnico.getName", "utente.personale.Tecnico.Tecnico" ],
+  "utente.personale.TecnicoTest.testSetName_case1" : [ "utente.personale.Tecnico.getName", "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.setName" ],
+  "utente.UtenteTest.testGetName_case1" : [ "utente.Utente.Utente", "utente.Utente.getName" ],
+  "utente.UtenteTest.testGetAddress_case1" : [ "utente.Utente.Utente", "utente.Utente.getAddress" ]
 }

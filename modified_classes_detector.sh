@@ -35,9 +35,32 @@ JU2JMH_OUT_DIR="./ju2jmh/src/jmh/java"
 APP_TEST_SRC_DIR="./app/src/test/java"
 APP_TEST_CLASSES_DIR="./app/build/classes/java/test"
 
+
+
 #AMBER
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 AMBER_JAR="$ROOT_DIR/libs/jmh-core-1.37-all.jar"
+# BOOTSTRAP (Python)
+BOOTSTRAP_SCRIPT="tools/bootstrap/bootstrap_compare_from_compare_json.py"
+
+# Separiamo binario e args (command -v NON gestisce "py.exe -3")
+BOOTSTRAP_PY_BIN=""
+BOOTSTRAP_PY_ARGS=()
+
+if command -v py.exe >/dev/null 2>&1; then
+  BOOTSTRAP_PY_BIN="py.exe"
+  BOOTSTRAP_PY_ARGS=(-3)
+elif command -v python3 >/dev/null 2>&1; then
+  BOOTSTRAP_PY_BIN="python3"
+  BOOTSTRAP_PY_ARGS=()
+elif command -v python >/dev/null 2>&1; then
+  BOOTSTRAP_PY_BIN="python"
+  BOOTSTRAP_PY_ARGS=()
+else
+  BOOTSTRAP_PY_BIN=""
+  BOOTSTRAP_PY_ARGS=()
+fi
+
 ls -la "$AMBER_JAR" || true
 
 # fail-fast se manca (così non arrivi mai ad AMBER_JAR vuota senza accorgertene)
@@ -223,6 +246,215 @@ amber_env_after() {
   true
 }
 
+open_html() {
+  local f="$1"
+  [[ -f "$f" ]] || { echo "[DASH][WARN] html not found: $f"; return 1; }
+
+  # Preferisci un browser esplicito se settato
+  if [[ -n "${BROWSER:-}" ]]; then
+    "$BROWSER" "$f" >/dev/null 2>&1 & disown || true
+    return 0
+  fi
+
+  case "$(uname -s 2>/dev/null || echo "")" in
+    Darwin*) open "$f" >/dev/null 2>&1 & disown ;;
+    Linux*)  xdg-open "$f" >/dev/null 2>&1 & disown ;;
+    CYGWIN*|MINGW*|MSYS*) start "" "$(cygpath -w "$f")" >/dev/null 2>&1 ;;
+    *) echo "[DASH][WARN] cannot auto-open on this OS. File: $f"; return 1 ;;
+  esac
+}
+
+amber_compare_last2() {
+  local bench_dir="$1"
+
+    local hist="$bench_dir/history.list"
+    if [[ ! -f "$hist" ]]; then
+      echo "[AMBER][CMP][WARN] missing $hist" >&2
+      return 0
+    fi
+
+    local prev curr
+    prev="$(tail -n 2 "$hist" | sed -n '1p')"
+    curr="$(tail -n 2 "$hist" | sed -n '2p')"
+
+    if [[ -z "$prev" || -z "$curr" ]]; then
+      echo "[AMBER][CMP][WARN] need 2 runs in $hist" >&2
+      return 0
+    fi
+
+    if [[ ! -s "$prev" || ! -s "$curr" ]]; then
+      echo "[AMBER][CMP][WARN] prev/curr json missing or empty" >&2
+      echo "[AMBER][CMP][DBG] prev=$prev" >&2
+      echo "[AMBER][CMP][DBG] curr=$curr" >&2
+      return 0
+    fi
+
+    local ts out
+    ts="$(date +%Y%m%d_%H%M%S)"
+    out="$bench_dir/compare_${ts}.json"
+
+  # Converti a path Windows per PowerShell (Git Bash ha cygpath)
+  local prev_win curr_win out_win
+  if command -v cygpath >/dev/null 2>&1; then
+    prev_win="$(cygpath -w "$prev")"
+    curr_win="$(cygpath -w "$curr")"
+    out_win="$(cygpath -w "$out")"
+  else
+    # fallback: lascia così com'è
+    prev_win="$prev"
+    curr_win="$curr"
+    out_win="$out"
+  fi
+
+  # Script PowerShell temporaneo (niente quoting fragile)
+  local ps1
+  ps1="$(mktemp --suffix=.ps1 2>/dev/null || mktemp)"
+  cat > "$ps1" <<'PS1'
+param(
+  [Parameter(Mandatory=$true)][string]$PrevPath,
+  [Parameter(Mandatory=$true)][string]$CurrPath,
+  [Parameter(Mandatory=$true)][string]$OutPath
+)
+
+function Load-JmhMap([string]$path) {
+  $txt = Get-Content -Raw -LiteralPath $path
+  $arr = $txt | ConvertFrom-Json
+  if (-not ($arr -is [System.Collections.IEnumerable])) { throw "Expected JSON array in $path" }
+
+  $map = @{}
+  foreach ($x in $arr) {
+    $b = $x.benchmark
+    if ($null -ne $b -and $b -ne "") {
+      $score = $null
+      if ($x.primaryMetric -and $x.primaryMetric.score -ne $null) { $score = [double]$x.primaryMetric.score }
+      $map[$b] = $score
+    }
+  }
+  return $map
+}
+
+$prev = Load-JmhMap $PrevPath
+$curr = Load-JmhMap $CurrPath
+
+$prevKeys = @($prev.Keys)
+$currKeys = @($curr.Keys)
+
+$common  = @($prevKeys | Where-Object { $curr.ContainsKey($_) } | Sort-Object)
+$added   = @($currKeys | Where-Object { -not $prev.ContainsKey($_) } | Sort-Object)
+$removed = @($prevKeys | Where-Object { -not $curr.ContainsKey($_) } | Sort-Object)
+
+$comparisons = @()
+foreach ($b in $common) {
+  $p = $prev[$b]
+  $c = $curr[$b]
+  $delta = $null
+  if ($p -ne $null -and $c -ne $null -and $p -ne 0) {
+    $delta = (($c - $p) / $p) * 100.0
+  }
+  $comparisons += [pscustomobject]@{
+    benchmark = $b
+    prev      = $p
+    curr      = $c
+    delta_pct = $delta
+  }
+}
+
+$obj = [pscustomobject]@{
+  prev_file    = $PrevPath
+  curr_file    = $CurrPath
+  common_count = $common.Count
+  added        = $added
+  removed      = $removed
+  comparisons  = $comparisons
+}
+
+$json = $obj | ConvertTo-Json -Depth 8
+Set-Content -LiteralPath $OutPath -Value $json -Encoding UTF8
+Write-Output $OutPath
+PS1
+
+  # Esegui PS (silenzia rumore)
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ps1" \
+    -PrevPath "$prev_win" -CurrPath "$curr_win" -OutPath "$out_win" \
+    >/dev/null 2>&1
+
+  local ps_rc=$?
+  rm -f "$ps1" 2>/dev/null || true
+
+  if [[ $ps_rc -ne 0 ]]; then
+    echo "[AMBER][CMP][WARN] powershell compare failed (rc=$ps_rc)" >&2
+    return 0
+  fi
+
+  if [[ ! -s "$out" ]]; then
+    echo "[AMBER][CMP][WARN] compare output empty: $out" >&2
+    return 0
+  fi
+
+   # NOTA:
+    # NON patchiamo prev_file/curr_file a path POSIX qui, perché il bootstrap può usare Python Windows
+    # e i path POSIX (/c/...) non sarebbero apribili.
+    :
+
+  echo "$out"
+  return 0
+}
+
+amber_bootstrap_from_compare_json() {
+  local compare_json="$1"   # es: .../compare_latest.json oppure compare_2026....json
+  local bench_dir="$2"      # cartella dove salvare bootstrap_*.json
+
+  if [[ -z "$compare_json" || ! -s "$compare_json" ]]; then
+    echo "[BOOT][WARN] compare json missing or empty: $compare_json" >&2
+    return 0
+  fi
+
+  if [[ ! -f "$BOOTSTRAP_SCRIPT" ]]; then
+    echo "[BOOT][WARN] missing bootstrap script: $BOOTSTRAP_SCRIPT" >&2
+    return 0
+  fi
+
+  if [[ -z "${BOOTSTRAP_PY_BIN:-}" ]] || ! command -v "$BOOTSTRAP_PY_BIN" >/dev/null 2>&1; then
+    echo "[BOOT][WARN] python not found: ${BOOTSTRAP_PY_BIN:-<empty>}" >&2
+    return 0
+  fi
+
+  local ts out
+    ts="$(date +%Y%m%d_%H%M%S)"
+    out="$bench_dir/bootstrap_${ts}.json"
+
+    # Decide se il Python che stiamo usando è "win32" (Python Windows) o no.
+    # - Se win32: passiamo a Python un path Windows del compare.json (cygpath -w)
+    # - Altrimenti: lasciamo il path POSIX
+    local pyplat cmp_arg
+    pyplat="$("$BOOTSTRAP_PY_BIN" "${BOOTSTRAP_PY_ARGS[@]}" -c "import sys; print(sys.platform)" 2>/dev/null || echo "")"
+    cmp_arg="$compare_json"
+
+    if [[ "$pyplat" == "win32" ]]; then
+      if command -v cygpath >/dev/null 2>&1; then
+        cmp_arg="$(cygpath -w "$compare_json")"
+      fi
+    fi
+
+    local errlog
+    errlog="${out%.json}.err.log"
+
+    if "$BOOTSTRAP_PY_BIN" "${BOOTSTRAP_PY_ARGS[@]}" "$BOOTSTRAP_SCRIPT" "$cmp_arg" > "$out" 2> "${out%.json}.err.log"; then
+        # se python fallisce, log già scritto in ${out%.json}.err.log
+      if [[ -s "$out" ]]; then
+        rm -f "$errlog" 2>/dev/null || true
+        echo "$out"
+      else
+        echo "[BOOT][WARN] bootstrap output empty: $out (see $errlog)" >&2
+        rm -f "$out" 2>/dev/null || true
+        return 0
+      fi
+    else
+      echo "[BOOT][WARN] bootstrap python failed (see $errlog)" >&2
+      rm -f "$out" 2>/dev/null || true
+      return 0
+    fi
+}
 amber_run_for_owner_testclass() {
   local owner_test_class_fqn="$1"
   local kind="$2"                   # modified|added
@@ -233,7 +465,6 @@ amber_run_for_owner_testclass() {
 
   : "${AMBER_PROFILE:=fast}"   # fast | full
 
-  # FAST
   if [[ "$AMBER_PROFILE" == "full" ]]; then
     : "${AMBER_FORKS:=5}"
     : "${AMBER_WI:=5}"
@@ -243,7 +474,7 @@ amber_run_for_owner_testclass() {
     : "${AMBER_TIMEOUT:=10m}"
     : "${AMBER_THREADS:=1}"
   else
-    : "${AMBER_FORKS:=1}"
+    : "${AMBER_FORKS:=5}"
     : "${AMBER_WI:=1}"
     : "${AMBER_WTIME:=1s}"
     : "${AMBER_MI:=2}"
@@ -254,13 +485,11 @@ amber_run_for_owner_testclass() {
 
   echo "[AMBER] JMH profile=$AMBER_PROFILE  forks=$AMBER_FORKS  w=($AMBER_WI x $AMBER_WTIME)  m=($AMBER_MI x $AMBER_MTIME)  to=$AMBER_TIMEOUT  t=$AMBER_THREADS"
 
-  # 1) prereq jar
   if [[ ! -f "$AMBER_JAR" ]]; then
     echo "[AMBER][FATAL] Missing AMBER jar at: $AMBER_JAR"
     return 1
   fi
 
-  # 2) locate ju2jmh jmhJar output
   local jmh_jar
   jmh_jar="$(ls -1t ju2jmh/build/libs/*-jmh.jar 2>/dev/null | head -n 1 || true)"
   if [[ -z "$jmh_jar" ]]; then
@@ -269,29 +498,19 @@ amber_run_for_owner_testclass() {
   fi
   echo "[AMBER] Using jmh jar: $jmh_jar"
 
-  # 3) results path (storico) - DOPPIA VISTA:
-  #   - by-benchmark: storico + compare (stabile tra commit)
-  #   - by-commit: manifest/puntatori per audit (per commit)
   local sha ts outdir_bench outdir_commit outfile
-
   sha="$(git rev-parse --short HEAD 2>/dev/null || echo "no-git")"
   ts="$(date +%Y%m%d_%H%M%S)"
 
-  # Storico stabile: qui vivono history.list / last2.list / compare_*.*
   outdir_bench="$AMBER_RESULTS_DIR/by-benchmark/$prod_class_fqn/$owner_test_class_fqn"
   mkdir -p "$outdir_bench"
 
-  # Vista per commit: qui mettiamo solo manifest (o copie se vuoi in futuro)
   outdir_commit="$AMBER_RESULTS_DIR/by-commit/$sha/$prod_class_fqn/$owner_test_class_fqn"
   mkdir -p "$outdir_commit"
 
-  # JSON reale salvato nello storico stabile
   outfile="$outdir_bench/${kind}_${sha}_${ts}.json"
-
-  # placeholder
   : > "$outfile" 2>/dev/null || true
 
-  # include regex: matcha tutti i benchmark generati per quella test class
   local include_pat="^${owner_test_class_fqn//./\\.}\\._Benchmark\\..*"
 
   echo "[AMBER] Output JSON: $outfile"
@@ -315,7 +534,7 @@ amber_run_for_owner_testclass() {
   }
   trap cleanup_amber RETURN
 
-  # 4) env tuning: su Windows/MINGW/MSYS/CYGWIN skippa (niente sudo spam)
+  # 4) env tuning
   local uname_s
   uname_s="$(uname -s 2>/dev/null || echo "unknown")"
   case "$uname_s" in
@@ -346,7 +565,6 @@ amber_run_for_owner_testclass() {
   local HOST_OPT=""
   HOST_OPT="$(grep -Eo -- '-hhost\b|-host\b|-haddr\b' <<< "$help_out" | head -n 1 || true)"
 
-  # log file
   local logf="${outfile%.json}.log"
   echo "[AMBER] Log file: $logf"
 
@@ -383,24 +601,21 @@ amber_run_for_owner_testclass() {
     echo "[AMBER][ERROR] JMH/AMBER failed (rc=$rc). See log: $logf"
   fi
 
-  # 7) post-check: file creato e non vuoto?
   if [[ -s "$outfile" ]]; then
     echo "[AMBER] OK -> saved: $outfile"
   else
-    echo "[AMBER][WARN] Output json missing/empty: $outfile"
-    echo "[AMBER][DBG] Maybe include pattern matched nothing: $include_pat"
-    echo "[AMBER][DBG] Try listing available benchmarks:"
     java -cp "${AMBER_JAR}${CP_SEP}${jmh_jar}" org.openjdk.jmh.Main -l 2>/dev/null \
       | grep -E "${owner_test_class_fqn//./\\.}\\.\\_Benchmark\\." | head -n 50 || true
   fi
 
-  # storico (SEMPRE nello storico stabile by-benchmark)
+  # storico
   if [[ -s "$outfile" ]]; then
-    echo "$outfile" >> "$outdir_bench/history.list"
-    tail -n 2 "$outdir_bench/history.list" > "$outdir_bench/last2.list"
+    local hist="$outdir_bench/history.list"
+    local last2="$outdir_bench/last2.list"
 
-    # Vista per commit: salva un manifest con il path reale del JSON
-    # (evita symlink su Windows; niente copie; solo puntatori)
+    echo "$outfile" >> "$hist"
+    tail -n 2 "$hist" > "$last2"
+
     {
       echo "kind=$kind"
       echo "sha=$sha"
@@ -412,111 +627,134 @@ amber_run_for_owner_testclass() {
       echo "log=${outfile%.json}.log"
     } > "$outdir_commit/manifest_${kind}_${ts}.txt"
 
-    # (opzionale) una lista append-only per commit
     echo "$outfile" >> "$outdir_commit/history.list"
   fi
 
-  # compare: DEVE usare lo storico stabile (così confronta C1 vs C3 anche se in mezzo c'è added)
-  if [[ "$kind" == "modified" ]]; then
-    amber_compare_last2 "$outdir_bench"
-  fi
+  # =========================
+    # DASHBOARD (HTML) + AUTO OPEN
+    # =========================
+    local html_latest=""
+    local compare_latest=""
+    local boot_latest=""
+
+    # 1) sempre genera report per added/modified (con json_latest)
+    if [[ -s "$outfile" ]]; then
+      local json_latest="$outdir_bench/${kind}_latest.json"
+      cp -f "$outfile" "$json_latest" 2>/dev/null || true
+
+      html_latest="$outdir_bench/report_${kind}_latest.html"
+
+      # ---- COMPARE (per-kind latest) ----
+      if [[ "$kind" == "modified" || "$kind" == "added" ]]; then
+        local cmp_json=""
+        local compare_latest_path="$outdir_bench/compare_latest.json"
+
+        rm -f "$compare_latest_path" 2>/dev/null || true
+        compare_latest=""
+
+        cmp_json="$(amber_compare_last2 "$outdir_bench" || true)"
+        if [[ -n "$cmp_json" && -s "$cmp_json" ]]; then
+          compare_latest="$compare_latest_path"
+          cp -f "$cmp_json" "$compare_latest" 2>/dev/null || true
+          echo "[AMBER] Compare OK -> $compare_latest"
+        else
+          echo "[AMBER][WARN] compare not produced (need 2 runs in history.list)."
+        fi
+        if [[ -n "$cmp_json" && -s "$cmp_json" ]]; then
+          compare_latest="$compare_latest_path"
+          cp -f "$cmp_json" "$compare_latest" 2>/dev/null || true
+          echo "[AMBER] Compare OK -> $compare_latest"
+        else
+          echo "[AMBER][WARN] compare not produced (need 2 ${kind} runs)."
+        fi
+      fi
+
+      # ---- BOOTSTRAP (per-kind latest) ----
+      if [[ ( "$kind" == "modified" || "$kind" == "added" ) && -n "$compare_latest" && -s "$compare_latest" ]]; then
+        local boot_json=""
+        local boot_latest_path="$outdir_bench/bootstrap_${kind}_latest.json"
+
+        # IMPORTANTISSIMO: elimina il "latest" vecchio prima di rigenerare
+        rm -f "$boot_latest_path" 2>/dev/null || true
+        boot_latest=""
+
+        boot_json="$(amber_bootstrap_from_compare_json "$compare_latest" "$outdir_bench" || true)"
+        if [[ -n "$boot_json" && -s "$boot_json" ]]; then
+          boot_latest="$boot_latest_path"
+          cp -f "$boot_json" "$boot_latest" 2>/dev/null || true
+          echo "[AMBER][BOOT] Bootstrap OK -> $boot_latest"
+        else
+          echo "[AMBER][BOOT][WARN] bootstrap not produced."
+        fi
+      fi
+
+      # Genera report principale:
+            # - modified: se compare_latest esiste -> aggiungi --compare-json (+ bootstrap se presente)
+            # report added/modified: se compare_latest esiste -> aggancia compare (+ bootstrap se c'è)
+            if [[ -n "$compare_latest" && -s "$compare_latest" ]]; then
+              if [[ -n "${boot_latest:-}" && -s "$boot_latest" ]]; then
+                bash "tools/dashboard/generate_dashboard.sh" \
+                  --kind "$kind" \
+                  --bench-dir "$outdir_bench" \
+                  --json "$json_latest" \
+                  --compare-json "$compare_latest" \
+                  --bootstrap-json "$boot_latest" \
+                  --out "$html_latest" \
+                  --sha "$sha" \
+                  --ts "$ts" \
+                  --prod "$prod_class_fqn" \
+                  --test "$owner_test_class_fqn" || true
+              else
+                bash "tools/dashboard/generate_dashboard.sh" \
+                  --kind "$kind" \
+                  --bench-dir "$outdir_bench" \
+                  --json "$json_latest" \
+                  --compare-json "$compare_latest" \
+                  --out "$html_latest" \
+                  --sha "$sha" \
+                  --ts "$ts" \
+                  --prod "$prod_class_fqn" \
+                  --test "$owner_test_class_fqn" || true
+              fi
+            else
+              bash "tools/dashboard/generate_dashboard.sh" \
+                --kind "$kind" \
+                --bench-dir "$outdir_bench" \
+                --json "$json_latest" \
+                --out "$html_latest" \
+                --sha "$sha" \
+                --ts "$ts" \
+                --prod "$prod_class_fqn" \
+                --test "$owner_test_class_fqn" || true
+            fi
+
+      # Apri subito il report added/modified
+      if [[ "${OPEN_DASHBOARD:-1}" == "1" ]]; then
+        open_html "$html_latest" || true
+      fi
+
+      # (opzionale) se modified e compare_latest esiste, genera e apri anche report_compare_latest.html
+      if [[ ( "$kind" == "modified" || "$kind" == "added" ) && -n "$compare_latest" && -s "$compare_latest" ]]; then
+        local cmp_html="$outdir_bench/report_compare_latest.html"
+        bash "tools/dashboard/generate_dashboard.sh" \
+          --kind "compare" \
+          --bench-dir "$outdir_bench" \
+          --json "$compare_latest" \
+          --out "$cmp_html" \
+          --sha "$sha" \
+          --ts "$ts" \
+          --prod "$prod_class_fqn" \
+          --test "$owner_test_class_fqn" || true
+
+        if [[ "${OPEN_COMPARE_DASHBOARD:-0}" == "1" && "${OPEN_DASHBOARD:-1}" == "1" ]]; then
+          open_html "$cmp_html" || true
+        fi
+      fi
+    fi
 
   return 0
 }
-amber_compare_last2() {
-  local outdir="$1"
-  local last2="$outdir/last2.list"
-  [[ -f "$last2" ]] || return 0
-  [[ $(wc -l < "$last2") -eq 2 ]] || return 0
-  command -v jq >/dev/null 2>&1 || { echo "[AMBER][CMP] jq missing -> skip compare"; return 0; }
 
-  local prev curr
-  prev="$(sed -n '1p' "$last2")"
-  curr="$(sed -n '2p' "$last2")"
-  [[ -f "$prev" && -f "$curr" ]] || { echo "[AMBER][CMP] missing json files -> skip"; return 0; }
-
-  # se uno dei due è vuoto, non possiamo comparare
-  if [[ ! -s "$prev" || ! -s "$curr" ]]; then
-    echo "[AMBER][CMP] prev/curr json empty -> skip"
-    echo "  prev=$prev (size=$(wc -c < "$prev" 2>/dev/null || echo 0))"
-    echo "  curr=$curr (size=$(wc -c < "$curr" 2>/dev/null || echo 0))"
-    return 0
-  fi
-
-  local ts rpt_json rpt_txt jqprog
-  ts="$(date +%Y%m%d_%H%M%S)"
-  rpt_json="$outdir/compare_${ts}.json"
-  rpt_txt="$outdir/compare_${ts}.txt"
-  jqprog="$(mktemp)"
-
-  cat > "$jqprog" <<'JQ'
-def score_map($arr):
-  reduce $arr[] as $b ({}; . + { ($b.benchmark): ($b.primaryMetric.score) });
-
-$prev[0] as $P
-| $curr[0] as $C
-| (score_map($P)) as $prevMap
-| (score_map($C)) as $currMap
-| ($prevMap | keys) as $prevKeys
-| ($currMap | keys) as $currKeys
-| ($prevKeys | map(select($currMap[.] != null))) as $common
-| {
-    prev_file: $prev_file,
-    curr_file: $curr_file,
-    common_count: ($common | length),
-    added: ($currKeys - $prevKeys),
-    removed: ($prevKeys - $currKeys),
-    comparisons: (
-      $common
-      | map({
-          benchmark: .,
-          prev: $prevMap[.],
-          curr: $currMap[.],
-          delta_pct: ((($currMap[.] - $prevMap[.]) / $prevMap[.]) * 100)
-        })
-      | sort_by(.delta_pct) | reverse
-    )
-  }
-JQ
-
-  # NB: --slurpfile carica ciascun file come array (quindi $prev[0] è l’array reale dei benchmark)
-  if ! jq -n \
-      --arg prev_file "$prev" --arg curr_file "$curr" \
-      --slurpfile prev "$prev" --slurpfile curr "$curr" \
-      -f "$jqprog" > "$rpt_json" 2>/dev/null; then
-    echo "[AMBER][CMP] jq failed -> skip compare."
-    echo "  prev=$prev"
-    echo "  curr=$curr"
-    echo "  Tip: controlla che siano JSON validi:"
-    echo "    head -n 5 \"$prev\""
-    echo "    head -n 5 \"$curr\""
-    rm -f "$jqprog"
-    return 0
-  fi
-
-  {
-    echo "prev: $prev"
-    echo "curr: $curr"
-    echo "----"
-    jq -r '
-      "common=" + (.common_count|tostring)
-      + " added=" + ((.added|length)|tostring)
-      + " removed=" + ((.removed|length)|tostring)
-    ' "$rpt_json"
-    echo "---- TOP comparisons (by delta_pct) ----"
-    jq -r '
-      .comparisons[]
-      | "\(.benchmark)\n  prev=\(.prev)  curr=\(.curr)  delta_pct=\(.delta_pct)\n"
-    ' "$rpt_json" | head -n 120
-    echo "---- added ----"
-    jq -r '.added[]?' "$rpt_json"
-    echo "---- removed ----"
-    jq -r '.removed[]?' "$rpt_json"
-  } > "$rpt_txt"
-
-  rm -f "$jqprog"
-  echo "[AMBER][CMP] report: $rpt_txt"
-}
 generate_jmh_for_testclass() {
   local test_class_fqn="$1"   # es: utente.UtenteTest
 
@@ -548,8 +786,6 @@ generate_jmh_for_testclass() {
     local tmp_out
     tmp_out="$(mktemp -d)"
 
-    echo "[JMH][DBG] OUT before convert count = $(find "$JU2JMH_OUT_DIR" -type f -name "*.java" | wc -l)"
-
     # --- per-class class list (evita problemi della lista globale) ---
     local one_class_file
     one_class_file="$(mktemp)"
@@ -567,8 +803,6 @@ generate_jmh_for_testclass() {
     fi
 
     rm -f "$one_class_file" 2>/dev/null || true
-    echo "[JMH][DBG] OUT after  convert count = $(find "$JU2JMH_OUT_DIR" -type f -name "*.java" | wc -l)"
-    echo "[JMH][DBG] TMP produced count      = $(find "$tmp_out" -type f -name "*.java" | wc -l)"
     if [[ "$(find "$tmp_out" -type f -name "*.java" | wc -l)" -eq 0 ]]; then
         echo "[JMH][ERROR] Converter produced 0 java files in tmp_out for $test_class_fqn"
         rm -rf "$tmp_out" 2>/dev/null || true
@@ -594,8 +828,6 @@ generate_jmh_for_testclass() {
 
         mkdir -p "$(dirname "$dst_java")"
         cp -f "$src_java" "$dst_java"
-        echo "[JMH][DBG] Copied only: $rel"
-
 
         # =========================
         # HARD CHECK: benchmark MUST exist
@@ -686,9 +918,6 @@ ensure_test_extends_base() {
 
     { print }
   ' "$tf" > "$tmp" && mv "$tmp" "$tf"
-
-  echo "[DBG][EXTENDS] ensured extends in $tf:"
-  grep -nE "^[[:space:]]*public[[:space:]]+class[[:space:]]+" "$tf" | head -n 1 || true
 }
 
 purge_coverage_for_required_tests() {
@@ -805,7 +1034,6 @@ ensure_static_import() {
 
 merge_generated_tests() {
   local test_file="$1"
-    echo "[DBG] pristine used: ${test_file}.pristine"
   local gen_file="${test_file%.java}.generated.java"
   local bak_file="${test_file}.pristine"
 
@@ -1177,7 +1405,6 @@ merge_generated_tests() {
 # NORMALIZE: evita @Test duplicati nello stesso blocco
 # - se un blocco contiene più @Test, tienine solo il primo
 # =========================
-echo "[DBG][PERL] SNROMOZS"
 perl -0777 -i -pe '
   my @blocks = split(/\n\s*\/\*__TEST_BLOCK__\*\/;?\s*\n/, $_);
 
@@ -1355,7 +1582,6 @@ fi
       }
     ' "$REQUIRED_TESTS_FILE" | sed 's/\r$//' | sort -u > "$req_bases"
 
-    echo "[DBG] req_bases (base-collapsed):"
     nl -ba "$req_bases"
 
     # ============================
@@ -1372,7 +1598,6 @@ fi
 
     mv "$req_bases_norm" "$req_bases"
 
-    echo "[DBG] req_bases (normalized):"
     nl -ba "$req_bases"
 
     # >>> creazione req_bases_ext <<<
@@ -1436,20 +1661,12 @@ echo "========================================================"
       echo "[MERGE][DEBUG] methods BEFORE rename:"
       perl -ne 'print "$.:\t$1\n" if(/(?:public|protected|private)?\s*(?:static\s+)?void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" | head -n 40 || true
 
-echo "================ DEBUG RENAME START ================"
-echo "[DBG] tmp_methods path: $tmp_methods"
-echo "[DBG] tmp_methods size BEFORE rename: $(wc -c < "$tmp_methods") bytes"
-echo "[DBG] Methods BEFORE rename:"
-perl -ne 'print "$.:\t$1\n" if(/(?:public|protected|private)?\s*void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" || true
-echo "===================================================="
-
     # --- FIX: SAFE RENAME to required bases ONLY when we can MATCH by prod call ---
     # req_bases: testGetName -> prod getName ; testSetSurname -> prod setSurname ; ...
     # --- GENERAL RENAME: assign each generated block to ONE required base by scoring prod-call occurrences ---
     tmp_methods_before_rename="$(mktemp)"
     cp -f "$tmp_methods" "$tmp_methods_before_rename"
 
-    echo "[DBG][PERL] FFGE"
     REQBASES="$req_bases" perl -0777 -i -pe '
       use strict;
       use warnings;
@@ -1537,22 +1754,10 @@ echo "===================================================="
 
     rm -f "$tmp_methods_before_rename"
 
-    echo "================ DEBUG RENAME END =================="
-    echo "[DBG] tmp_methods size AFTER rename: $(wc -c < "$tmp_methods") bytes"
-    echo "[DBG] Methods AFTER rename:"
-    perl -ne 'print "$.:\t$1\n" if(/(?:public|protected|private)?\s*void\s+([A-Za-z0-9_]+)\s*\(/);' "$tmp_methods" || true
-    echo "===================================================="
-
-
-
-    # =========================
-    # tieni solo blocchi con base in req_bases
-    # =========================
     # STEP 3 (cleanup spazzatura): tieni solo blocchi con base in req_bases
     # FAIL-SAFE: se filtra tutto, lascia invariato
     # =========================
 if false; then
-  echo "[DBG][PERL] SPAZZA"
     REQBASES="$req_bases" perl -0777 -i -pe '
       my $orig = $_;
 
@@ -1590,7 +1795,6 @@ if false; then
     ' "$tmp_methods"
 fi
         # --- CANONICAL RENUMBER (stable): per ogni base, garantisci case1..caseN in ordine ---
-        echo "[DBG][PERL] CANE"
         perl -i -pe '
           BEGIN { our %k; }
           if (/^\s*(?:public|protected|private)?\s*void\s+([A-Za-z0-9_]+)\s*\(/) {
@@ -1715,7 +1919,6 @@ fi
             # --- END CANONICAL RENUMBER ---
 
     # ricostruisci tmp_names coerente con i nuovi nomi
-    echo "[DBG][PERL] STEP RICOST"
     perl -0777 -ne '
       while(/(?:public|protected|private)?\s*(?:static\s+)?void\s+([A-Za-z0-9_]+)\s*\(/g){
         print "$1\n";
@@ -1745,11 +1948,9 @@ fi
   fi
 
 # Normalizza CRLF -> LF sul target per rendere affidabili awk/grep/perl
-echo "[DBG][PERL] STEP CRLF"
 perl -pi -e 's/\r$//mg' "$test_file"
 
 # ripulisci i test rigenerati da annotazioni JUnit5
-echo "[DBG][PERL] JUNIT5"
 perl -i -ne '
   next if /^\s*\@(?:DisplayName|BeforeEach|AfterEach|Nested|ParameterizedTest|MethodSource|ValueSource|CsvSource|CsvFileSource|RepeatedTest|Tag|Tags|TestFactory|TestInstance|TestMethodOrder|Order)\b/;
   print;
@@ -1972,7 +2173,6 @@ awk -v bases_file="$req_bases_ext" -v prods_file="$req_prods" '
   }
 ' "$test_file" > "$tmp_killer_drop" && mv "$tmp_killer_drop" "$test_file"
 
-echo "[DBG] After KILLER DROP (signature-based):"
 grep -nE "void[[:space:]]+testSetName_case1" "$test_file" || true
 
 # =========================
@@ -2012,7 +2212,6 @@ awk '
   }
 ' "$test_file" > "$tmp_orphan_block" && mv "$tmp_orphan_block" "$test_file"
 
-echo "[DBG] Orphan @Test lines (if any):"
 awk '
   {lines[NR]=$0}
   END{
@@ -2035,7 +2234,7 @@ awk '
 #     @Test
 #     public void ...
 # =========================
-echo "[DBG][PERL] DEDUP TARGET"
+
 perl -0777 -i -pe '1 while s/(\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test\b[^\n]*\n)(\s*\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test\b[^\n]*\n)/$1/gm;' "$test_file"
 
 # INSERT ALWAYS
@@ -2075,12 +2274,7 @@ fi
 
 mv "$tmp_out_ins" "$test_file"
 
-echo "[DBG] After INSERT tmp_methods (profession-related):"
-grep -nE "void[[:space:]]+(testGetProfession|getProfession)" "$test_file" || true
-
-
       # cleanup in coda
-      echo "[DBG][PERL] CLEANUP"
       perl -0777 -i -pe '1 while s/\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[ \t]*\n[ \t]*\z/\n/s; 1 while s/\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[ \t]*\z/\n/s;' "$test_file"
 
         # GUARD immediato: verifica che i metodi in tmp_names siano presenti nel target dopo l'inserimento
@@ -2147,7 +2341,6 @@ grep -nE "void[[:space:]]+(testGetProfession|getProfession)" "$test_file" || tru
     # FINAL DEDUP @Test (paracadute definitivo)
     # - Collassa sequenze di @Test ripetuti (anche con righe vuote/spazi in mezzo)
     # =========================
-    echo "[DBG][PERL] STEP DEDUP"
     perl -0777 -i -pe '
       s/(\n[ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[^\n]*\n)(?:[ \t]*\n)*([ \t]*@(?:[A-Za-z0-9_.]*\.)?Test[^\n]*\n)+/$1/gm;
     ' "$test_file"
@@ -2163,9 +2356,6 @@ grep -nE "void[[:space:]]+(testGetProfession|getProfession)" "$test_file" || tru
     if grep -qE '\bassert(A|T|F|N|E)[A-Za-z0-9_]*\s*\(' "$test_file"; then
       ensure_static_import "$test_file" "org.junit.Assert.*"
     fi
-
-echo "[MERGE][DEBUG] TARGET methods AFTER FINAL INSERT (first 50 case methods):"
-echo "[DBG] Top-level assert lines (should be NONE):"
 
 awk '
   function brace_delta(s,   t,o,c){
@@ -2353,7 +2543,6 @@ rm -f "$tmp_guard_out" "${tmp_guard_out}.err" 2>/dev/null || true
 
  rm -f "$tmp_final_guard_err" 2>/dev/null || true
 
-  echo "[DBG] FINAL CHECK: required *_case1 present?"
   while IFS= read -r base; do
     base="$(sanitize_line "$base")"
     [[ -z "$base" ]] && continue
@@ -3252,8 +3441,6 @@ branch_modified() {
 
         sed -i.bak 's/\r$//' "$whitelist" && rm -f "$whitelist.bak" 2>/dev/null || true
         sort -u "$whitelist" -o "$whitelist"
-        echo "[DBG] whitelist path: $whitelist"
-        echo "[DBG] whitelist size: $(wc -l < "$whitelist")"
         nl -ba "$whitelist" | head -n 20
         # Usa la whitelist già creata sopra (adatta il nome variabile se diverso)
         WHITELIST_FILE="$whitelist"
@@ -3364,13 +3551,6 @@ branch_modified() {
 
       done < "$test_classes_file"
 
-      echo "[DBG] After CLEANUP spazzatura, department case methods present?"
-      echo "[DBG] Department signatures AFTER CLEANUP spazzatura:"
-      grep -nE "public[[:space:]]+void[[:space:]]+test(Get|Set)Department" "$tf" || echo "(none)"
-      echo "[DBG] Department calls AFTER CLEANUP spazzatura:"
-      grep -n "getDepartment" "$tf" || echo "(none)"
-      grep -nE "void[[:space:]]+([A-Za-z0-9_]*GetDepartment|[A-Za-z0-9_]*getDepartment|testGetDepartment|getDepartment)[A-Za-z0-9_]*_case[0-9]+[[:space:]]*\\(" "$tf" || true
-
       if [[ "$bad" -eq 1 ]]; then
         echo "[BRANCH i] Guard failed -> restoring backups and retrying."
         for tf in "${!backups[@]}"; do
@@ -3385,8 +3565,6 @@ branch_modified() {
       echo "[BRANCH i] Validating regenerated tests (only affected classes for this entry)..."
       mapfile -t gradle_args < <(build_gradle_tests_args "$test_classes_file")
 
-      echo "================ DEBUG PRE-COMPILE STRUCTURE ================"
-      echo "[DBG] Entries listed in: $test_classes_file"
 
       while IFS= read -r entry; do
         entry="$(sanitize_line "$entry")"
@@ -3478,14 +3656,9 @@ branch_modified() {
         # =========================
         # PURGE coverage-matrix.json: rimuovi BASE + *_caseN per i test richiesti (prima di eseguire i test)
         # =========================
-        echo "[DBG][COV] Keys matching required bases BEFORE purge: $(jq -r 'keys[]' "$COVERAGE_MATRIX_JSON" | grep -E "^(utente\.personale\.AmministratoreTest\.test(Get|Set)Department)(_[A-Za-z0-9]+)*(_case[0-9]+)?$" | wc -l || true)"
-        echo "[DBG][COV] COVERAGE_MATRIX_JSON path = $COVERAGE_MATRIX_JSON"
-        echo "[DBG][COV] Required file path = $REQUIRED_TESTS_FILE"
-        echo "[DBG][COV] First 20 required keys:"
+
         nl -ba "$REQUIRED_TESTS_FILE" | sed -n '1,20p' || true
         purge_coverage_for_required_tests "$REQUIRED_TESTS_FILE" || true
-        echo "[DBG][COV] Keys matching required bases AFTER purge:  $(jq -r 'keys[]' "$COVERAGE_MATRIX_JSON" | grep -E "^(utente\.personale\.AmministratoreTest\.test(Get|Set)Department)(_[A-Za-z0-9]+)*(_case[0-9]+)?$" | wc -l || true)"
-        echo "[DBG][COV] After purge, keys still present (grep):"
         while IFS= read -r k; do
           k="$(sanitize_line "$k")"
           [[ -z "$k" ]] && continue
@@ -3514,15 +3687,6 @@ branch_modified() {
         tf="$(fqn_to_test_path "$cls")"
         ensure_test_extends_base "$tf" "BaseCoverageTest"
       done < "$test_classes_file"
-
-      echo "================ DEBUG RIGHT BEFORE GRADLE (ACTUAL CALL) ================"
-      echo "[DBG][GRADLE] pwd=$(pwd)"
-      echo "[DBG][GRADLE] test_classes_file=$test_classes_file"
-      echo "[DBG][GRADLE] gradle_args count=${#gradle_args[@]}"
-      printf "[DBG][GRADLE] gradle_args:\n"; printf '  - %q\n' "${gradle_args[@]}"
-      echo "======================================================================="
-
-
 
       set +e
       ./gradlew :app:test --rerun-tasks "${gradle_args[@]}"

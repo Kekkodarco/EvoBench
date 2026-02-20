@@ -1,0 +1,269 @@
+# JMH version: 1.37
+# VM version: JDK 23.0.1, Java HotSpot(TM) 64-Bit Server VM, 23.0.1+11-39
+# VM invoker: C:\Program Files\Java\jdk-23\bin\java.exe
+# VM options: <none>
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 1 iterations, 1 s each
+# Measurement: 2 iterations, 1 s each
+# Timeout: 1 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Throughput, ops/time
+# Benchmark: utente.UtenteTest._Benchmark.benchmark_testGetAddress_case1
+
+# Run progress: 0,00% complete, ETA 00:00:06
+# Fork: 1 of 1
+# Warmup Iteration   1: [JacocoCoverageListener][WARN] JaCoCo MBean not found (org.jacoco:type=Runtime). Coverage collection skipped for this JVM. If this happens under JMH/AMBER, you must attach JaCoCo agent to that JVM to collect coverage.
+638735,652 ops/s
+# Warmup Iteration   2: 1258631,023 ops/s
+# Warmup Iteration   3: 1276962,975 ops/s
+# Warmup Iteration   4: 1277315,590 ops/s
+# Warmup Iteration   5: 1278272,256 ops/s
+# Warmup Iteration   6: 1274789,161 ops/s
+# Warmup Iteration   7: 1262565,256 ops/s
+# Warmup Iteration   8: 1255852,183 ops/s
+# Warmup Iteration   9: 1270546,136 ops/s
+# Warmup Iteration  10: 1278570,431 ops/s
+# Warmup Iteration  11: 1273797,902 ops/s
+# Warmup Iteration  12: 1274813,380 ops/s
+# Warmup Iteration  13: 1277796,012 ops/s
+# Warmup Iteration  14: 1275594,606 ops/s
+# Warmup Iteration  15: 1279612,278 ops/s
+# Warmup Iteration  16: 1262131,096 ops/s
+# Warmup Iteration  17: 1262313,541 ops/s
+# Warmup Iteration  18: 1271092,683 ops/s
+# Warmup Iteration  19: 1272280,238 ops/s
+# Warmup Iteration  20: 1280202,309 ops/s
+# Warmup Iteration  21: 1272609,295 ops/s
+# Warmup Iteration  22: 1273217,839 ops/s
+# Warmup Iteration  23: 1275902,678 ops/s
+# Warmup Iteration  24: 1279080,288 ops/s
+# Warmup Iteration  25: 1277919,440 ops/s
+# Warmup Iteration  26: 1276091,242 ops/s
+# Warmup Iteration  27: 1261822,894 ops/s
+# Warmup Iteration  28: 1275207,401 ops/s
+# Warmup Iteration  29: 1281134,882 ops/s
+# Warmup Iteration  30: 1278523,256 ops/s
+# Warmup Iteration  31: 1273514,637 ops/s
+# Warmup Iteration  32: 1282642,468 ops/s
+# Warmup Iteration  33: 1281290,897 ops/s
+# Warmup Iteration  34: 1280738,163 ops/s
+# Warmup Iteration  35: 1280658,940 ops/s
+# Warmup Iteration  36: 1278283,773 ops/s
+# Warmup Iteration  37: 1270950,802 ops/s
+# Warmup Iteration  38: 1264753,231 ops/s
+# Warmup Iteration  39: 1271370,431 ops/s
+# Warmup Iteration  40: 1254807,699 ops/s
+# Warmup Iteration  41: 1255961,783 ops/s
+# Warmup Iteration  42: 1276819,739 ops/s
+# Warmup Iteration  43: 1274000,639 ops/s
+# Warmup Iteration  44: 1276147,870 ops/s
+# Warmup Iteration  45: 1275070,273 ops/s
+# Warmup Iteration  46: 1283550,162 ops/s
+# Warmup Iteration  47: 1262708,651 ops/s
+# Warmup Iteration  48: 1276280,053 ops/s
+# Warmup Iteration  49: 1272040,710 ops/s
+# Warmup Iteration  50: 1276846,191 ops/s
+# Warmup Iteration  51: 1278128,453 ops/s
+# Warmup Iteration  52: 1276288,285 ops/s
+# Warmup Iteration  53: 1280266,601 ops/s
+# Warmup Iteration  54: 1279984,836 ops/s
+# Warmup Iteration  55: 1275330,512 ops/s
+# Warmup Iteration  56: 1270108,735 ops/s
+# Warmup Iteration  57: 1259941,149 ops/s
+# Warmup Iteration  58: 1276507,680 ops/s
+# Warmup Iteration  59: 1267243,129 ops/s
+# Warmup Iteration  60: 1282194,082 ops/s
+# Warmup Iteration  61: 1273860,086 ops/s
+# Warmup Iteration  62: 1273491,229 ops/s
+# Warmup Iteration  63: 1272697,005 ops/s
+# Warmup Iteration  64: 1272923,124 ops/s
+# Warmup Iteration  65: 1281189,565 ops/s
+# Warmup Iteration  66: 1274453,479 ops/s
+# Warmup Iteration  67: 1263394,562 ops/s
+# Warmup Iteration  68: 1251755,169 ops/s
+# Warmup Iteration  69: 1270108,330 ops/s
+# Warmup Iteration  70: 1278600,240 ops/s
+# Warmup Iteration  71: 1281915,566 ops/s
+# Warmup Iteration  72: 1276950,668 ops/s
+# Warmup Iteration  73: 1272776,404 ops/s
+# Warmup Iteration  74: 1269432,274 ops/s
+# Warmup Iteration  75: 1260173,914 ops/s
+# Warmup Iteration  76: 1252855,440 ops/s
+# Warmup Iteration  77: 1268801,463 ops/s
+# Warmup Iteration  78: 1268305,152 ops/s
+# Warmup Iteration  79: 1274740,821 ops/s
+# Warmup Iteration  80: 1270005,923 ops/s
+# Warmup Iteration  81: 1270346,863 ops/s
+# Warmup Iteration  82: 1281882,775 ops/s
+# Warmup Iteration  83: 1272597,603 ops/s
+# Warmup Iteration  84: 1282258,063 ops/s
+# Warmup Iteration  85: 1279593,182 ops/s
+# Warmup Iteration  86: 1262837,354 ops/s
+# Warmup Iteration  87: 1279212,859 ops/s
+# Warmup Iteration  88: 1279161,395 ops/s
+# Warmup Iteration  89: 1285211,628 ops/s
+# Warmup Iteration  90: 1274782,088 ops/s
+# Warmup Iteration  91: 1275874,699 ops/s
+# Warmup Iteration  92: 1276123,367 ops/s
+# Warmup Iteration  93: 1270848,814 ops/s
+# Warmup Iteration  94: 1271237,290 ops/s
+# Warmup Iteration  95: 1278105,251 ops/s
+# Warmup Iteration  96: 1257153,474 ops/s
+# Warmup Iteration  97: 1270333,662 ops/s
+# Warmup Iteration  98: 1272091,906 ops/s
+# Warmup Iteration  99: 1274944,072 ops/s
+# Warmup Iteration 100: 1272054,531 ops/s
+# Warmup Iteration 101: 1270495,169 ops/s
+Halt eseguito
+
+
+Result "utente.UtenteTest._Benchmark.benchmark_testGetAddress_case1":
+  1272946,553 ±(99.9%) 2497,098 ops/s [Average]
+  (min, avg, max) = (1251755,169, 1272946,553, 1285211,628), stdev = 7362,749
+  CI (99.9%): [1270449,455, 1275443,651] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 23.0.1, Java HotSpot(TM) 64-Bit Server VM, 23.0.1+11-39
+# VM invoker: C:\Program Files\Java\jdk-23\bin\java.exe
+# VM options: <none>
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 1 iterations, 1 s each
+# Measurement: 2 iterations, 1 s each
+# Timeout: 1 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Throughput, ops/time
+# Benchmark: utente.UtenteTest._Benchmark.benchmark_testGetName_case1
+
+# Run progress: 50,00% complete, ETA 00:01:42
+# Fork: 1 of 1
+# Warmup Iteration   1: [JacocoCoverageListener][WARN] JaCoCo MBean not found (org.jacoco:type=Runtime). Coverage collection skipped for this JVM. If this happens under JMH/AMBER, you must attach JaCoCo agent to that JVM to collect coverage.
+650318,637 ops/s
+# Warmup Iteration   2: 1291725,088 ops/s
+# Warmup Iteration   3: 1301609,961 ops/s
+# Warmup Iteration   4: 1302713,591 ops/s
+# Warmup Iteration   5: 1292772,508 ops/s
+# Warmup Iteration   6: 1306090,121 ops/s
+# Warmup Iteration   7: 1299009,196 ops/s
+# Warmup Iteration   8: 1302331,266 ops/s
+# Warmup Iteration   9: 1306489,488 ops/s
+# Warmup Iteration  10: 1298039,396 ops/s
+# Warmup Iteration  11: 1308971,749 ops/s
+# Warmup Iteration  12: 1305451,510 ops/s
+# Warmup Iteration  13: 1312887,901 ops/s
+# Warmup Iteration  14: 1310311,851 ops/s
+# Warmup Iteration  15: 1291160,201 ops/s
+# Warmup Iteration  16: 1304545,416 ops/s
+# Warmup Iteration  17: 1304669,685 ops/s
+# Warmup Iteration  18: 1305385,734 ops/s
+# Warmup Iteration  19: 1293021,315 ops/s
+# Warmup Iteration  20: 1301953,983 ops/s
+# Warmup Iteration  21: 1298811,257 ops/s
+# Warmup Iteration  22: 1301697,534 ops/s
+# Warmup Iteration  23: 1310417,763 ops/s
+# Warmup Iteration  24: 1303562,171 ops/s
+# Warmup Iteration  25: 1285286,754 ops/s
+# Warmup Iteration  26: 1293581,086 ops/s
+# Warmup Iteration  27: 1292071,059 ops/s
+# Warmup Iteration  28: 1307940,477 ops/s
+# Warmup Iteration  29: 1304759,885 ops/s
+# Warmup Iteration  30: 1295239,070 ops/s
+# Warmup Iteration  31: 1302474,021 ops/s
+# Warmup Iteration  32: 1308150,632 ops/s
+# Warmup Iteration  33: 1301329,781 ops/s
+# Warmup Iteration  34: 1304993,041 ops/s
+# Warmup Iteration  35: 1291654,859 ops/s
+# Warmup Iteration  36: 1303417,404 ops/s
+# Warmup Iteration  37: 1302655,674 ops/s
+# Warmup Iteration  38: 1298684,124 ops/s
+# Warmup Iteration  39: 1303996,791 ops/s
+# Warmup Iteration  40: 1309457,778 ops/s
+# Warmup Iteration  41: 1297242,732 ops/s
+# Warmup Iteration  42: 1306150,775 ops/s
+# Warmup Iteration  43: 1305122,176 ops/s
+# Warmup Iteration  44: 1291536,712 ops/s
+# Warmup Iteration  45: 1301527,750 ops/s
+# Warmup Iteration  46: 1296719,146 ops/s
+# Warmup Iteration  47: 1304284,537 ops/s
+# Warmup Iteration  48: 1310307,022 ops/s
+# Warmup Iteration  49: 1306628,969 ops/s
+# Warmup Iteration  50: 1305529,789 ops/s
+# Warmup Iteration  51: 1304833,311 ops/s
+# Warmup Iteration  52: 1311989,790 ops/s
+# Warmup Iteration  53: 1304812,622 ops/s
+# Warmup Iteration  54: 1299254,117 ops/s
+# Warmup Iteration  55: 1307551,217 ops/s
+# Warmup Iteration  56: 1297298,220 ops/s
+# Warmup Iteration  57: 1296311,106 ops/s
+# Warmup Iteration  58: 1301344,524 ops/s
+# Warmup Iteration  59: 1301326,420 ops/s
+# Warmup Iteration  60: 1300075,938 ops/s
+# Warmup Iteration  61: 1296971,461 ops/s
+# Warmup Iteration  62: 1303622,057 ops/s
+# Warmup Iteration  63: 1299739,376 ops/s
+# Warmup Iteration  64: 1292220,981 ops/s
+# Warmup Iteration  65: 1301628,528 ops/s
+# Warmup Iteration  66: 1307534,972 ops/s
+# Warmup Iteration  67: 1306793,933 ops/s
+# Warmup Iteration  68: 1301633,329 ops/s
+# Warmup Iteration  69: 1308258,202 ops/s
+# Warmup Iteration  70: 1308088,215 ops/s
+# Warmup Iteration  71: 1306918,969 ops/s
+# Warmup Iteration  72: 1304790,569 ops/s
+# Warmup Iteration  73: 1303354,386 ops/s
+# Warmup Iteration  74: 1288655,587 ops/s
+# Warmup Iteration  75: 1304527,029 ops/s
+# Warmup Iteration  76: 1300821,379 ops/s
+# Warmup Iteration  77: 1306362,365 ops/s
+# Warmup Iteration  78: 1307189,031 ops/s
+# Warmup Iteration  79: 1309309,604 ops/s
+# Warmup Iteration  80: 1307217,832 ops/s
+# Warmup Iteration  81: 1303648,439 ops/s
+# Warmup Iteration  82: 1304750,626 ops/s
+# Warmup Iteration  83: 1311362,895 ops/s
+# Warmup Iteration  84: 1289418,646 ops/s
+# Warmup Iteration  85: 1299022,310 ops/s
+# Warmup Iteration  86: 1309006,646 ops/s
+# Warmup Iteration  87: 1294666,053 ops/s
+# Warmup Iteration  88: 1305098,839 ops/s
+# Warmup Iteration  89: 1314154,435 ops/s
+# Warmup Iteration  90: 1306678,776 ops/s
+# Warmup Iteration  91: 1309507,118 ops/s
+# Warmup Iteration  92: 1308112,668 ops/s
+# Warmup Iteration  93: 1289791,028 ops/s
+# Warmup Iteration  94: 1291179,381 ops/s
+# Warmup Iteration  95: 1294692,986 ops/s
+# Warmup Iteration  96: 1302415,778 ops/s
+# Warmup Iteration  97: 1303343,018 ops/s
+# Warmup Iteration  98: 1301839,022 ops/s
+# Warmup Iteration  99: 1296411,933 ops/s
+# Warmup Iteration 100: 1306733,806 ops/s
+# Warmup Iteration 101: 1308034,533 ops/s
+Halt eseguito
+
+
+Result "utente.UtenteTest._Benchmark.benchmark_testGetName_case1":
+  1302246,747 ±(99.9%) 2082,546 ops/s [Average]
+  (min, avg, max) = (1285286,754, 1302246,747, 1314154,435), stdev = 6140,435
+  CI (99.9%): [1300164,201, 1304329,294] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:03:24
+
+REMEMBER: The numbers below are just data. To gain reusable insights, you need to follow up on
+why the numbers are the way they are. Use profilers (see -prof, -lprof), design factorial
+experiments, perform baseline and negative tests that provide experimental control, make sure
+the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
+Do not assume the numbers tell you what you want them to tell.
+
+NOTE: Current JVM experimentally supports Compiler Blackholes, and they are in use. Please exercise
+extra caution when trusting the results, look into the generated code to check the benchmark still
+works, and factor in a small probability of new VM bugs. Additionally, while comparisons between
+different JVMs are already problematic, the performance difference caused by different Blackhole
+modes can be very significant. Please make sure you use the consistent Blackhole mode for comparisons.
+
+Benchmark                                              Mode  Cnt        Score      Error  Units
+UtenteTest._Benchmark.benchmark_testGetAddress_case1  thrpt  100  1272946,553 ± 2497,098  ops/s
+UtenteTest._Benchmark.benchmark_testGetName_case1     thrpt  100  1302246,747 ± 2082,546  ops/s
+
+Benchmark result is saved to C:/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.Utente/utente.UtenteTest/modified_770c168_20260201_191500.json

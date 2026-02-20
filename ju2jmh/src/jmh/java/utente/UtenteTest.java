@@ -20,51 +20,39 @@ public class UtenteTest extends BaseCoverageTest {
     }
 
     @Test
-    public void testGetTelephone() {
-        assertEquals("123", utente.getTelephone());
-    }
-
-    @Test
-    public void testGetAddress() {
-        assertEquals("via mazzini", utente.getAddress(1));
-    }
-
-    @Test
-    public void testGetContoBancario() {
-        assertNotNull(utente.getContoBancario());
-    }
-
-    @Test
     public void testGetName_case1() {
-        // assert that the name is correctly set
-        assertEquals("John", utente.getName());
+        // Arrange
+        String expected = "John";
+        Utente utente = new Utente(expected, null, null, null, null);
+        // Act
+        String actual = utente.getName();
+        // Assert
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testGetAddress_case1() {
+        // Arrange
+        Utente utente = new Utente("", "", "", "", null);
+        // Act
+        String address = utente.getAddress(0);
+        // Assert
+        assertEquals("", address);
     }
 
     @org.openjdk.jmh.annotations.State(org.openjdk.jmh.annotations.Scope.Thread)
     public static class _Benchmark extends listener.BaseCoverageTest._Benchmark {
 
         @org.openjdk.jmh.annotations.Benchmark
-        public void benchmark_testGetTelephone() throws java.lang.Throwable {
-            this.createImplementation();
-            this.runBenchmark(this.implementation()::testGetTelephone, this.description("testGetTelephone"));
-        }
-
-        @org.openjdk.jmh.annotations.Benchmark
-        public void benchmark_testGetAddress() throws java.lang.Throwable {
-            this.createImplementation();
-            this.runBenchmark(this.implementation()::testGetAddress, this.description("testGetAddress"));
-        }
-
-        @org.openjdk.jmh.annotations.Benchmark
-        public void benchmark_testGetContoBancario() throws java.lang.Throwable {
-            this.createImplementation();
-            this.runBenchmark(this.implementation()::testGetContoBancario, this.description("testGetContoBancario"));
-        }
-
-        @org.openjdk.jmh.annotations.Benchmark
         public void benchmark_testGetName_case1() throws java.lang.Throwable {
             this.createImplementation();
             this.runBenchmark(this.implementation()::testGetName_case1, this.description("testGetName_case1"));
+        }
+
+        @org.openjdk.jmh.annotations.Benchmark
+        public void benchmark_testGetAddress_case1() throws java.lang.Throwable {
+            this.createImplementation();
+            this.runBenchmark(this.implementation()::testGetAddress_case1, this.description("testGetAddress_case1"));
         }
 
         @java.lang.Override

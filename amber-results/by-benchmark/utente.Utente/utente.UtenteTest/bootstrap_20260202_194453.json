@@ -1,0 +1,34 @@
+[
+  {
+    "benchmark": "utente.UtenteTest._Benchmark.benchmark_testGetAddress_case1",
+    "delta_pct": 1.3357926903419752,
+    "bootstrap": {
+      "ok": true,
+      "iters": 5000,
+      "ci95": [
+        0.5891879961286065,
+        2.3103570507271547
+      ],
+      "p_two_sided": 0.0,
+      "verdict": "REGRESSION",
+      "n": 5000
+    },
+    "verdict": "IMPROVEMENT"
+  },
+  {
+    "benchmark": "utente.UtenteTest._Benchmark.benchmark_testGetName_case1",
+    "delta_pct": -5.296628204265983,
+    "bootstrap": {
+      "ok": true,
+      "iters": 5000,
+      "ci95": [
+        -5.442287617652101,
+        -5.146797746780265
+      ],
+      "p_two_sided": 0.0,
+      "verdict": "IMPROVEMENT",
+      "n": 5000
+    },
+    "verdict": "REGRESSION"
+  }
+]

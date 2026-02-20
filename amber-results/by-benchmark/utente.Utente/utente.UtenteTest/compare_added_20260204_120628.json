@@ -1,0 +1,25 @@
+﻿{
+    "prev_file":  "C:\\Users\\franc\\IdeaProjects\\GradleProject\\amber-results\\by-benchmark\\utente.Utente\\utente.UtenteTest\\added_38e017e_20260203_193047.json",
+    "curr_file":  "C:\\Users\\franc\\IdeaProjects\\GradleProject\\amber-results\\by-benchmark\\utente.Utente\\utente.UtenteTest\\added_32e28f7_20260204_114028.json",
+    "common_count":  2,
+    "added":  [
+                  "utente.UtenteTest._Benchmark.benchmark_testSetTelephone_case1"
+              ],
+    "removed":  [
+                    "utente.UtenteTest._Benchmark.benchmark_testTelefono_case1"
+                ],
+    "comparisons":  [
+                        {
+                            "benchmark":  "utente.UtenteTest._Benchmark.benchmark_testGetAddress_case1",
+                            "prev":  1199879.2568008206,
+                            "curr":  1178446.338751829,
+                            "delta_pct":  -1.786256235993039
+                        },
+                        {
+                            "benchmark":  "utente.UtenteTest._Benchmark.benchmark_testGetName_case1",
+                            "prev":  1279096.1386080594,
+                            "curr":  1105996.5185039882,
+                            "delta_pct":  -13.532964011011872
+                        }
+                    ]
+}
