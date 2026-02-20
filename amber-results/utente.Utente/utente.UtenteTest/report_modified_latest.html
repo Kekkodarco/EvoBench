@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AMBER Report - utente.UtenteTest</title>
+  <style>
+    :root{
+      --bg:#ffffff; --card:#ffffff; --border:#eaeaea; --muted:#6b7280; --text:#111827;
+      --pill:#fafafa; --pill-border:#e7e7e7;
+      --good:#0a7; --bad:#d33; --mid:#777;
+      --shadow:0 6px 22px rgba(0,0,0,.06); --radius:14px;
+    }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:24px;background:var(--bg);color:var(--text);}
+    .wrap{max-width:1100px;margin:0 auto;}
+    .topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
+    h1{font-size:22px;margin:0;letter-spacing:.2px;}
+    .subtitle{color:var(--muted);font-size:12px;margin-top:4px;}
+    .meta{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0;}
+    .pill{padding:6px 10px;border:1px solid var(--pill-border);border-radius:999px;font-size:12px;background:var(--pill);}
+    .grid{display:grid;grid-template-columns:1fr;gap:14px;}
+    .card{border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:var(--card);box-shadow:var(--shadow);}
+    .muted{color:var(--muted);}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;}
+    .title-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+    h2{font-size:16px;margin:0;}
+    .kpi{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
+    .kpi .pill{background:#fcfcfc;}
+    .sticky{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+    table{border-collapse:collapse;width:100%;}
+    th,td{border-bottom:1px solid #f0f0f0;padding:10px;text-align:left;vertical-align:top;}
+    th{background:#fafafa;font-weight:650;}
+    .right{text-align:right;}
+    .sticky thead th{position:sticky;top:0;z-index:1;}
+
+    .delta{font-weight:800;}
+    .delta.pos{color:var(--good);}
+    .delta.neg{color:var(--bad);}
+    .delta.zero{color:var(--mid);}
+
+    .rowhint{color:var(--muted);font-size:12px;margin-top:8px;}
+    .empty{padding:14px;border:1px dashed var(--border);border-radius:var(--radius);background:#fcfcfc;color:var(--muted);}
+    pre.debug{margin:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius);background:#fcfcfc;overflow:auto;max-height:520px;}
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>AMBER Benchmark report</h1>
+      <div class="subtitle">Report locale (file:// OK) • JSON embeddato (niente fetch)</div>
+    </div>
+    <div class="meta">
+      <div class="pill">kind: <b>modified</b></div>
+      <div class="pill">sha: <b>f98bb50</b></div>
+      <div class="pill">ts: <b>20260204_122056</b></div>
+      <div class="pill">prod: <b>utente.Utente</b></div>
+      <div class="pill">test: <b>utente.UtenteTest</b></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="muted">Source JSON</div>
+      <div class="mono" style="margin-top:6px;">/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.Utente/utente.UtenteTest/modified_latest.json</div>
+
+      <div class="kpi">
+        <div class="pill">Formato: <b id="kpi-format">-</b></div>
+        <div class="pill">Righe: <b id="kpi-rows">-</b></div>
+        <div class="pill">Summary: <b id="kpi-summary">-</b></div>
+      </div>
+
+      <div class="rowhint">
+        In modified, se il compare è presente: mostro prev/curr/delta% (verde migliora, rosso peggiora).
+      </div>
+
+      <div class="rowhint" id="kpi-compare-path" style="display:none;">
+        <span class="muted">Compare JSON:</span> <span class="mono" id="cmp-path"></span>
+      </div>
+    </div>
+    <div class="rowhint" id="kpi-bootstrap-path" style="display:none;">
+      <span class="muted">Bootstrap JSON:</span> <span class="mono" id="boot-path"></span>
+    </div>
+
+    <!-- payload embed (NO fetch) -->
+    <script id="payload" type="text/plain">[
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "utente.UtenteTest._Benchmark.benchmark_testGetAddress_case1",
+        "mode" : "thrpt",
+        "threads" : 1,
+        "dynamicHaltHost" : "localhost",
+        "dynamicHaltPort" : "5001",
+        "dynamicHaltModel" : "oscnn",
+        "forks" : 1,
+        "jvm" : "C:\\Program Files\\Java\\jdk-23\\bin\\java.exe",
+        "jvmArgs" : [
+        ],
+        "jdkVersion" : "23.0.1",
+        "vmName" : "Java HotSpot(TM) 64-Bit Server VM",
+        "vmVersion" : "23.0.1+11-39",
+        "warmupIterations" : [
+            [
+                1
+            ]
+        ],
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 100,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "primaryMetric" : {
+            "score" : 1143127.6859766694,
+            "scoreError" : 39692.55189940119,
+            "scoreConfidence" : [
+                1103435.1340772682,
+                1182820.2378760707
+            ],
+            "scorePercentiles" : {
+                "0.0" : 567158.6110128945,
+                "50.0" : 1168527.7790309365,
+                "90.0" : 1245701.8615378693,
+                "95.0" : 1270315.4305269353,
+                "99.0" : 1315796.7749626152,
+                "99.9" : 1315837.343258316,
+                "99.99" : 1315837.343258316,
+                "99.999" : 1315837.343258316,
+                "99.9999" : 1315837.343258316,
+                "100.0" : 1315837.343258316
+            },
+            "scoreUnit" : "ops/s",
+            "rawData" : [
+                [
+                    1311053.5519402658,
+                    1315837.343258316,
+                    1300505.4391351237,
+                    1311780.513688257,
+                    1120917.6804939988,
+                    1168930.3489749336,
+                    1202348.6454163145,
+                    1165959.744864208,
+                    1213240.2068107764,
+                    1148580.2693685857,
+                    1229990.1465504481,
+                    1092711.6020490278,
+                    1124568.778965259,
+                    1063198.9137797882,
+                    996699.2647276854,
+                    1036408.8790693405,
+                    567158.6110128945,
+                    874494.4198853164,
+                    931465.1851935714,
+                    823680.4738617165,
+                    884464.0137745976,
+                    864591.7471146098,
+                    830789.9843008239,
+                    910028.1508548791,
+                    1051848.1480591572,
+                    1050100.4302916406,
+                    1075845.560442326,
+                    1083649.603291516,
+                    1047994.342000503,
+                    1018232.2204930007,
+                    998644.515970637,
+                    1262922.7227970045,
+                    1099101.707550445,
+                    1204760.7397376453,
+                    1047110.2203885162,
+                    1261279.3447792137,
+                    1229660.6614207237,
+                    1128012.6945946035,
+                    1107660.816592614,
+                    1213265.1506256605,
+                    1182369.7701827625,
+                    1183618.6476293667,
+                    1161735.516589144,
+                    1129074.0538011964,
+                    1192789.6234848243,
+                    1156111.4333160522,
+                    1146839.1629804976,
+                    1173749.2285946799,
+                    1216249.5537728437,
+                    1159554.472293952,
+                    1191736.6221700304,
+                    1182328.8964539142,
+                    1213759.0856042774,
+                    1234969.1418779793,
+                    1205121.9630561024,
+                    1222274.2741078874,
+                    1211143.0769131582,
+                    1222450.0521768196,
+                    1244025.9152117488,
+                    1161813.2639462831,
+                    1164628.9245305844,
+                    1136931.5181571234,
+                    1097402.8103201778,
+                    1153114.588810743,
+                    1127193.274700128,
+                    1161508.001958444,
+                    1121109.423238677,
+                    1181915.7643903892,
+                    1225387.8488248566,
+                    1208354.328943527,
+                    1216260.1834424594,
+                    1234760.156167938,
+                    1192619.3782254022,
+                    1245888.0777963272,
+                    1181725.6752507815,
+                    1217089.6574095478,
+                    1207185.739340735,
+                    1121496.4695685315,
+                    1168125.2090869395,
+                    1107361.4547663894,
+                    1151334.8262027926,
+                    1190907.7238364527,
+                    1150410.421993249,
+                    1057823.4556719828,
+                    1211708.0446186007,
+                    1193301.390704707,
+                    1270704.520407458,
+                    1204578.7799619932,
+                    1152938.9485955844,
+                    1161925.5285917402,
+                    1187038.8603511357,
+                    1248815.6666277242,
+                    1223774.1644118815,
+                    1103452.0956522913,
+                    1082683.4358550918,
+                    1210701.601715509,
+                    1248516.1674872767,
+                    1215354.2789062785,
+                    1221046.68640904,
+                    1194486.9664469496
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "utente.UtenteTest._Benchmark.benchmark_testGetName_case1",
+        "mode" : "thrpt",
+        "threads" : 1,
+        "dynamicHaltHost" : "localhost",
+        "dynamicHaltPort" : "5001",
+        "dynamicHaltModel" : "oscnn",
+        "forks" : 1,
+        "jvm" : "C:\\Program Files\\Java\\jdk-23\\bin\\java.exe",
+        "jvmArgs" : [
+        ],
+        "jdkVersion" : "23.0.1",
+        "vmName" : "Java HotSpot(TM) 64-Bit Server VM",
+        "vmVersion" : "23.0.1+11-39",
+        "warmupIterations" : [
+            [
+                1
+            ]
+        ],
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 100,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "primaryMetric" : {
+            "score" : 1169605.0212182996,
+            "scoreError" : 15386.111302343075,
+            "scoreConfidence" : [
+                1154218.9099159567,
+                1184991.1325206426
+            ],
+            "scorePercentiles" : {
+                "0.0" : 980055.8101704017,
+                "50.0" : 1173579.0067600897,
+                "90.0" : 1220841.9169961573,
+                "95.0" : 1231369.3621233222,
+                "99.0" : 1247549.3965030515,
+                "99.9" : 1247572.7361680518,
+                "99.99" : 1247572.7361680518,
+                "99.999" : 1247572.7361680518,
+                "99.9999" : 1247572.7361680518,
+                "100.0" : 1247572.7361680518
+            },
+            "scoreUnit" : "ops/s",
+            "rawData" : [
+                [
+                    1152626.4528716728,
+                    1184817.7465274998,
+                    1116185.7141354948,
+                    1107573.9201668436,
+                    1117910.2321281044,
+                    1191965.7212420732,
+                    1166519.771129926,
+                    1102257.3480075877,
+                    1027833.8075455399,
+                    1183880.966430778,
+                    1105767.580828368,
+                    1180886.0147725816,
+                    1132047.6520113656,
+                    1192824.808831244,
+                    1228540.7281276255,
+                    1160429.2542696295,
+                    1170107.4820603249,
+                    1153323.0636719663,
+                    1205794.820391126,
+                    1202785.709017732,
+                    1190342.8596615628,
+                    1137605.0592457966,
+                    1088482.9640634563,
+                    1199729.665395326,
+                    1165459.5044795673,
+                    1181173.6234131812,
+                    1162330.2595700168,
+                    1219590.5745765136,
+                    1245238.7696680154,
+                    1190158.7165465294,
+                    1149989.6782271848,
+                    1174083.7469948286,
+                    1197802.8666320324,
+                    1141297.2157837194,
+                    1156829.297019818,
+                    1201032.4341947723,
+                    1231518.23759678,
+                    1156567.5054047147,
+                    1194584.6850258757,
+                    1166301.9297072634,
+                    1141380.799656929,
+                    1227632.016992994,
+                    1145838.4833798355,
+                    1174197.6968665698,
+                    1179643.0231372353,
+                    1247572.7361680518,
+                    1178009.4730697328,
+                    1196609.9382174916,
+                    1209080.5460891442,
+                    1171597.2315106313,
+                    1173074.2665253507,
+                    1161246.687945972,
+                    1067385.7764738344,
+                    1158145.3858577425,
+                    1241257.2612203755,
+                    1208445.1503368202,
+                    1152984.7974342678,
+                    1090017.1431581401,
+                    1140565.2378653479,
+                    1193665.5640537788,
+                    1168101.2375244761,
+                    1156219.2052584733,
+                    1140910.0306775176,
+                    1214848.320612074,
+                    1205733.4375010796,
+                    1180136.8982614153,
+                    1189960.4640842546,
+                    1128370.8970347529,
+                    1243679.9232631456,
+                    1165517.8416048277,
+                    1166891.9690277819,
+                    1186873.7724478284,
+                    1220980.9550427843,
+                    1214065.7614546402,
+                    1196175.506734324,
+                    1209475.7017442798,
+                    1170359.4789572991,
+                    1226011.9209961223,
+                    1213027.8666443003,
+                    1180089.5629853853,
+                    1164803.202462263,
+                    1157902.905256515,
+                    1045168.4525745643,
+                    1223750.7240037422,
+                    1137265.7860944157,
+                    1122395.8310191035,
+                    1160374.729010606,
+                    1197403.0022144215,
+                    1195457.5540377165,
+                    1152207.016905527,
+                    1199197.1366278552,
+                    1219286.4925503612,
+                    1153754.800869406,
+                    1182424.4607364924,
+                    1184325.513595828,
+                    1191388.6166714956,
+                    1153233.905380008,
+                    1116057.6225188551,
+                    1154070.203938964,
+                    980055.8101704017
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    }
+]
+
+
+</script>
+    <script id="payload_compare" type="text/plain">﻿{
+    "prev_file":  "C:\\Users\\franc\\IdeaProjects\\GradleProject\\amber-results\\by-benchmark\\utente.Utente\\utente.UtenteTest\\added_38e017e_20260203_184603.json",
+    "curr_file":  "C:\\Users\\franc\\IdeaProjects\\GradleProject\\amber-results\\by-benchmark\\utente.Utente\\utente.UtenteTest\\modified_f98bb50_20260204_122056.json",
+    "common_count":  2,
+    "added":  [
+
+              ],
+    "removed":  [
+                    "utente.UtenteTest._Benchmark.benchmark_testTelefono_case1",
+                    "utente.UtenteTest._Benchmark.benchmark_testTelefono_case2"
+                ],
+    "comparisons":  [
+                        {
+                            "benchmark":  "utente.UtenteTest._Benchmark.benchmark_testGetAddress_case1",
+                            "prev":  1265843.2656339577,
+                            "curr":  1143127.6859766694,
+                            "delta_pct":  -9.6943739394015758
+                        },
+                        {
+                            "benchmark":  "utente.UtenteTest._Benchmark.benchmark_testGetName_case1",
+                            "prev":  1322109.2070750829,
+                            "curr":  1169605.0212182996,
+                            "delta_pct":  -11.534915954043615
+                        }
+                    ]
+}
+</script>
+    <script id="payload_bootstrap" type="text/plain">[
+  {
+    "benchmark": "utente.UtenteTest._Benchmark.benchmark_testGetAddress_case1",
+    "delta_pct": -9.694373939401576,
+    "bootstrap": {
+      "ok": true,
+      "iters": 5000,
+      "ci95": [
+        -11.623665937117154,
+        -7.933021577990345
+      ],
+      "p_two_sided": 0.0,
+      "verdict": "IMPROVEMENT",
+      "n": 5000
+    },
+    "verdict": "REGRESSION"
+  },
+  {
+    "benchmark": "utente.UtenteTest._Benchmark.benchmark_testGetName_case1",
+    "delta_pct": -11.534915954043615,
+    "bootstrap": {
+      "ok": true,
+      "iters": 5000,
+      "ci95": [
+        -12.304023740982272,
+        -10.74379733756935
+      ],
+      "p_two_sided": 0.0,
+      "verdict": "IMPROVEMENT",
+      "n": 5000
+    },
+    "verdict": "REGRESSION"
+  }
+]
+</script>
+
+    <div id="content" class="card"></div>
+
+    <noscript>
+      <div class="card"><b>Errore:</b> JavaScript è disabilitato nel browser.</div>
+    </noscript>
+  </div>
+</div>
+
+<script>
+  function fmt(n) {
+    if (n === null || n === undefined || Number.isNaN(n)) return "-";
+    const abs = Math.abs(n);
+    if (abs >= 1000) return n.toFixed(2);
+    if (abs >= 10) return n.toFixed(3);
+    return n.toFixed(6);
+  }
+  function fmtPct(n) {
+    if (n === null || n === undefined || Number.isNaN(n)) return "-";
+    const sign = (n > 0) ? "+" : "";
+    return sign + n.toFixed(3);
+  }
+  function classifyDelta(d) {
+    if (d === null || d === undefined || Number.isNaN(d)) return "zero";
+    if (d > 0) return "pos";
+    if (d < 0) return "neg";
+    return "zero";
+  }
+  function fmt2(n) {
+    if (n === null || n === undefined || Number.isNaN(n)) return "-";
+    return Number(n).toFixed(2);
+  }
+
+  function formatBootstrapResult(bootEntry) {
+    // ritorna { text, cls } dove cls = pos|neg|zero per colori
+    if (!bootEntry || !bootEntry.bootstrap || !bootEntry.bootstrap.ok) {
+      return { text: "no data", cls: "zero" };
+    }
+
+    const ci = bootEntry.bootstrap.ci95;
+    if (!Array.isArray(ci) || ci.length !== 2) {
+      return { text: "no data", cls: "zero" };
+    }
+
+    const lo = Number(ci[0]);
+    const hi = Number(ci[1]);
+    const verdict = bootEntry.verdict || bootEntry.bootstrap.verdict || "INCONCLUSIVE";
+
+    if (verdict === "IMPROVEMENT") {
+      // CI tutto > 0
+      return {
+        text: `improvement: ${fmt2(lo)}% ${fmt2(hi)}% faster`,
+        cls: "pos"
+      };
+    }
+
+    if (verdict === "REGRESSION") {
+      // CI tutto < 0  -> “slower” in positivo
+      const a = Math.abs(hi); // più vicino a 0
+      const b = Math.abs(lo); // più lontano da 0
+      return {
+        text: `regression: ${fmt2(a)}% ${fmt2(b)}% slower`,
+        cls: "neg"
+      };
+    }
+
+    // INCONCLUSIVE / no significant change: intervallo con segno
+    const slo = (lo > 0 ? "+" : "") + fmt2(lo) + "%";
+    const shi = (hi > 0 ? "+" : "") + fmt2(hi) + "%";
+    return {
+      text: `no significant change: ${slo} ${shi}`,
+      cls: "zero"
+    };
+  }
+  function readJsonFromScript(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const raw = (el.textContent || "").trim();
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (_) { return null; }
+  }
+
+  function buildCompareMap(compareObj) {
+    // map: benchmark -> {prev, curr, delta_pct}
+    const m = new Map();
+    if (!compareObj || typeof compareObj !== "object") return m;
+    const comps = Array.isArray(compareObj.comparisons) ? compareObj.comparisons : [];
+    for (const c of comps) {
+      const name = c && c.benchmark;
+      if (!name) continue;
+      m.set(name, {
+        prev: c.prev,
+        curr: c.curr,
+        delta_pct: c.delta_pct
+      });
+    }
+    return m;
+  }
+  function buildBootstrapMap(bootArr) {
+    // bootArr: [{ benchmark, bootstrap:{ok,ci95,...}, verdict }, ...]
+    const m = new Map();
+    if (!Array.isArray(bootArr)) return m;
+    for (const e of bootArr) {
+      const name = e && e.benchmark;
+      if (!name) continue;
+      m.set(name, e);
+    }
+    return m;
+  }
+  function renderAddedOrModified(jmhArr, compareMap /* optional */, bootstrapMap /* optional */) {
+    const rows = jmhArr.map(x => {
+      const benchmark = x?.benchmark || "";
+      const score = x?.primaryMetric?.score;           // curr
+      const err   = x?.primaryMetric?.scoreError;      // error bar
+      const unit  = x?.primaryMetric?.scoreUnit || "";
+      const cmp   = compareMap && benchmark ? compareMap.get(benchmark) : null;
+      const bootE = bootstrapMap && benchmark ? bootstrapMap.get(benchmark) : null;
+      return {
+        benchmark,
+        score, err, unit,
+        prev: cmp ? cmp.prev : null,
+        curr: cmp ? cmp.curr : score,
+        delta_pct: cmp ? cmp.delta_pct : null,
+        boot: bootE,
+        hasCmp: !!cmp
+      };
+    }).sort((a,b) => (b.score ?? -Infinity) - (a.score ?? -Infinity));
+
+    const hasCompareCols = !!compareMap;
+
+    return `
+      <div class="title-row">
+        <h2>Risultati</h2>
+        <div class="subtitle"> ${hasCompareCols ? "Mostro prev/curr dal compare. Il campo result usa il bootstrap (CI95)." : "Nessun compare agganciato."}</div>
+      </div>
+
+      ${rows.length ? `
+        <div class="sticky" style="margin-top:12px;">
+          <table>
+            <thead>
+                <tr>
+                  <th>benchmark</th>
+                  <th class="right">prev</th>
+                  <th class="right">curr</th>
+                  <th class="right">error</th>
+                  <th>unit</th>
+                  <th>result</th>
+                </tr>
+            </thead>
+            <tbody>
+  ${rows.map(r => {
+      // se il benchmark è nel compare => risultato bootstrap
+      if (r.hasCmp) {
+        const res = formatBootstrapResult(r.boot);
+        const cls = res.cls;
+        return `
+      <tr>
+        <td class="mono">${r.benchmark}</td>
+        <td class="right">${fmt(r.prev)}</td>
+        <td class="right">${fmt(r.curr)}</td>
+        <td class="right">${fmt(r.err)}</td>
+        <td>${r.unit}</td>
+        <td class="delta ${cls}">${res.text}</td>
+      </tr>
+    `;
+      }
+
+      // benchmark nuovo (non presente nel compare): solo error/unit, il resto "-"
+      return `
+  <tr>
+    <td class="mono">${r.benchmark}</td>
+    <td class="right">-</td>
+    <td class="right">${fmt(r.score)}</td>
+    <td class="right">${fmt(r.err)}</td>
+    <td>${r.unit}</td>
+    <td>-</td>
+  </tr>
+`;
+    }).join("")}
+</tbody>
+          </table>
+        </div>
+
+        <div class="rowhint">
+          <b>error</b> è l’incertezza stimata da JMH sullo score (es. intervallo/confidenza), non è “errore del programma”.
+        </div>
+      ` : `<div class="empty" style="margin-top:12px;">Nessun risultato nel JSON (array vuoto).</div>`}
+    `;
+  }
+
+  function renderCompareOnly(compareObj) {
+    const comps = (compareObj.comparisons || []).slice().sort((a,b) => (b.delta_pct ?? -Infinity) - (a.delta_pct ?? -Infinity));
+    return `
+      <div class="title-row">
+        <h2>Confronto (prev → curr)</h2>
+        <div class="subtitle">Delta%: verde = miglioramento, rosso = peggioramento</div>
+      </div>
+
+      <div class="sticky" style="margin-top:12px;">
+        <table>
+          <thead>
+            <tr>
+              <th>benchmark</th>
+              <th class="right">prev</th>
+              <th class="right">curr</th>
+              <th class="right">delta %</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${comps.map(c => {
+      const d = c?.delta_pct;
+      const cls = classifyDelta(d);
+      return `
+                <tr>
+                  <td class="mono">${c?.benchmark || ""}</td>
+                  <td class="right">${fmt(c?.prev)}</td>
+                  <td class="right">${fmt(c?.curr)}</td>
+                  <td class="right delta ${cls}">${fmtPct(d)}</td>
+                </tr>
+              `;
+    }).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  (function main() {
+    const content = document.getElementById("content");
+    const kpiFormat = document.getElementById("kpi-format");
+    const kpiRows = document.getElementById("kpi-rows");
+    const kpiSummary = document.getElementById("kpi-summary");
+
+    if (!content) { document.body.innerHTML = "<pre>ERRORE: #content non trovato</pre>"; return; }
+    content.innerHTML = `<div class="muted">Loading report...</div>`;
+
+    const kind = "modified";
+    const data = readJsonFromScript("payload");
+    const cmp  = readJsonFromScript("payload_compare");
+    const boot = readJsonFromScript("payload_bootstrap");
+
+    // mostra path compare se presente nel template (anche se vuoto non cambia)
+    const cmpPath = "/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.Utente/utente.UtenteTest/compare_latest.json";
+    if (cmpPath && cmpPath.trim().length > 0) {
+      const box = document.getElementById("kpi-compare-path");
+      const span = document.getElementById("cmp-path");
+      if (box && span) { box.style.display = "block"; span.textContent = cmpPath; }
+    }
+    const bootPath = "/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.Utente/utente.UtenteTest/bootstrap_modified_latest.json";
+    if (bootPath && bootPath.trim().length > 0) {
+      const box = document.getElementById("kpi-bootstrap-path");
+      const span = document.getElementById("boot-path");
+      if (box && span) { box.style.display = "block"; span.textContent = bootPath; }
+    }
+
+    if (!data) {
+      kpiFormat.textContent = "empty/invalid";
+      kpiRows.textContent = "0";
+      kpiSummary.textContent = "-";
+      content.innerHTML = `<div class="empty"><b>Errore:</b> payload JSON vuoto o non parsabile</div>`;
+      return;
+    }
+
+    // Se il payload principale è già un compare object
+    const looksLikeCompare = (data && typeof data === "object" && !Array.isArray(data) && Array.isArray(data.comparisons));
+    if (looksLikeCompare || kind === "compare") {
+      kpiFormat.textContent = "compare object";
+      kpiRows.textContent = String((data.comparisons || []).length);
+      kpiSummary.textContent = `common=${data.common_count ?? "-"}`;
+      content.innerHTML = renderCompareOnly(data);
+      return;
+    }
+
+    // JMH array (added/modified)
+    if (Array.isArray(data)) {
+      // aggancia compare SOLO se kind=modified e cmp è valido
+      const cmpLooksOk = (cmp && typeof cmp === "object" && !Array.isArray(cmp) && Array.isArray(cmp.comparisons));
+      const useCompare = ((kind === "modified" || kind === "added") && cmpLooksOk);
+      const compareMap = useCompare ? buildCompareMap(cmp) : null;
+
+      const bootLooksOk = Array.isArray(boot);
+      const bootstrapMap = ((kind === "modified" || kind === "added") && bootLooksOk) ? buildBootstrapMap(boot) : null;
+
+      content.innerHTML = renderAddedOrModified(data, compareMap, bootstrapMap);
+      return;
+    }
+
+    // fallback debug
+    kpiFormat.textContent = "object/other";
+    kpiRows.textContent = (data && typeof data === "object") ? String(Object.keys(data).length) : "-";
+    kpiSummary.textContent = "debug";
+    content.innerHTML = `
+      <div class="title-row">
+        <h2>Payload (debug)</h2>
+        <div class="subtitle">Formato non previsto: lo mostro in chiaro</div>
+      </div>
+      <pre class="debug" style="margin-top:12px;">${JSON.stringify(data, null, 2)}</pre>
+    `;
+  })();
+</script>
+</body>
+</html>

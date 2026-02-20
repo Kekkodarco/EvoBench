@@ -1,0 +1,25 @@
+﻿{
+    "prev_file":  "C:\\Users\\franc\\IdeaProjects\\GradleProject\\amber-results\\by-benchmark\\utente.Utente\\utente.UtenteTest\\modified_770c168_20260201_191500.json",
+    "curr_file":  "C:\\Users\\franc\\IdeaProjects\\GradleProject\\amber-results\\by-benchmark\\utente.Utente\\utente.UtenteTest\\modified_770c168_20260202_185130.json",
+    "common_count":  2,
+    "added":  [
+
+              ],
+    "removed":  [
+
+                ],
+    "comparisons":  [
+                        {
+                            "benchmark":  "utente.UtenteTest._Benchmark.benchmark_testGetAddress_case1",
+                            "prev":  1272946.5529977,
+                            "curr":  1264325.2687131923,
+                            "delta_pct":  -0.67726993440573779
+                        },
+                        {
+                            "benchmark":  "utente.UtenteTest._Benchmark.benchmark_testGetName_case1",
+                            "prev":  1302246.747340498,
+                            "curr":  1217366.2441256363,
+                            "delta_pct":  -6.5180046245619874
+                        }
+                    ]
+}

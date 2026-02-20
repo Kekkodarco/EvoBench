@@ -1,9 +1,0 @@
-banca.ContoBancarioTest.prelievo_saldoNegativo
-banca.ContoBancarioTest.prelievo_saldoNegativoSufficiente
-banca.ContoBancarioTest.prelievo_saldoSufficiente
-banca.ContoBancarioTest.testPrelievo
-banca.ContoBancarioTest.testPrelievoNegativo
-banca.ContoBancarioTest.testPrelievoPositivo
-banca.ContoBancarioTest.testPrelievoZero
-utente.UtenteTest.testGetName
-utente.UtenteTest.testSetName
