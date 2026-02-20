@@ -3,31 +3,28 @@ name: Build and Run Benchmark Tests
 on:
   push:
     branches:
-      - main  # Puoi modificare il nome del branch se necessario
+      - main
 
 jobs:
   build:
     name: Build Project
-    runs-on: ubuntu-latest  # Specifica il sistema operativo su cui eseguire l'azione
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2  # Azione per clonare il repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v4
         with:
-          distribution: 'adopt'
-          java-version: '17.0.10'  # Specifica la versione di Java da utilizzare
+          distribution: 'temurin'
+          java-version: '17'
 
+      # Replaces eskatos/gradle-command-action@v1 (fixes cache 400 issues)
       - name: Setup Gradle
-        uses: eskatos/gradle-command-action@v1
-        with:
-          arguments: build
-          cache-disabled: true
-          gradle-version: '7.4.2'  # Specifica la versione di Gradle da utilizzare
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Set execute permission for gradlew
         run: chmod +x gradlew
@@ -45,6 +42,6 @@ jobs:
         run: chmod +x modified_classes_detector.sh
 
       - name: Run Modified Classes Detector
-        run: ./modified_classes_detector.sh  # Esegui lo script benchmark_tests.sh
+        run: ./modified_classes_detector.sh
         env:
           ACTIONS_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
