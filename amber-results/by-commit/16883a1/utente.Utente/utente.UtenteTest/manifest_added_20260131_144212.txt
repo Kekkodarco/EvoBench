@@ -1,8 +1,0 @@
-kind=added
-sha=16883a1
-ts=20260131_144212
-prod_class=utente.Utente
-test_class=utente.UtenteTest
-include_pat=^utente\.UtenteTest\._Benchmark\..*
-json=/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.Utente/utente.UtenteTest/added_16883a1_20260131_144212.json
-log=/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.Utente/utente.UtenteTest/added_16883a1_20260131_144212.log

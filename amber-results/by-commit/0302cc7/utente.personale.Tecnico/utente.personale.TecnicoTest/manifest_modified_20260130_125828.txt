@@ -1,8 +1,0 @@
-kind=modified
-sha=0302cc7
-ts=20260130_125828
-prod_class=utente.personale.Tecnico
-test_class=utente.personale.TecnicoTest
-include_pat=^utente\.personale\.TecnicoTest\._Benchmark\..*
-json=/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.personale.Tecnico/utente.personale.TecnicoTest/modified_0302cc7_20260130_125828.json
-log=/c/Users/franc/IdeaProjects/GradleProject/amber-results/by-benchmark/utente.personale.Tecnico/utente.personale.TecnicoTest/modified_0302cc7_20260130_125828.log
