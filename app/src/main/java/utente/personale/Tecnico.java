@@ -33,8 +33,8 @@ public class Tecnico {
         this.profession = profession;
     }
 
-    public String getFullName2() {
-        return name + " " + surname;
+    public String dati() {
+        return name + " " + profession;
     }
 
 }
