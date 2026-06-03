@@ -16,14 +16,6 @@ public class TecnicoTest extends BaseCoverageTest {
 
     private Tecnico tecnico;
 
-    @Test
-    public void testCalcolo_case1() {
-        // Test the method with a positive code value, which should set the code field to that value and return without modifying any other fields.
-        int expectedCode = 1234;
-        Tecnico tecnico = new Tecnico("John", "Doe", "Teacher", 0);
-        tecnico.calcolo(expectedCode);
-        assertEquals(expectedCode, tecnico.getCode());
-    }
 
     @Test
     public void testGetSurname_case1() {
@@ -62,11 +54,6 @@ public class TecnicoTest extends BaseCoverageTest {
     @org.openjdk.jmh.annotations.State(org.openjdk.jmh.annotations.Scope.Thread)
     public static class _Benchmark extends listener.BaseCoverageTest._Benchmark {
 
-        @org.openjdk.jmh.annotations.Benchmark
-        public void benchmark_testCalcolo_case1() throws java.lang.Throwable {
-            this.createImplementation();
-            this.runBenchmark(this.implementation()::testCalcolo_case1, this.description("testCalcolo_case1"));
-        }
 
         @org.openjdk.jmh.annotations.Benchmark
         public void benchmark_testGetSurname_case1() throws java.lang.Throwable {

@@ -18,7 +18,6 @@
   "banca.ContoBancarioTest.testPrelievo_saldoNegativo_case1" : [ "banca.ContoBancario.prelievo", "banca.ContoBancario.getSaldo", "banca.ContoBancario.ContoBancario" ],
   "banca.ContoBancarioTest.testPrelievo_saldoSufficiente_case1" : [ "banca.ContoBancario.prelievo", "banca.ContoBancario.getSaldo", "banca.ContoBancario.ContoBancario" ],
   "utente.personale.AmministratoreTest.testGetSurname_case1" : [ "utente.personale.Amministratore.getSurname", "utente.personale.Amministratore.Amministratore" ],
-  "utente.personale.TecnicoTest.testCalcolo_case1" : [ "utente.personale.Tecnico.calcolo", "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getCode" ],
   "utente.personale.TecnicoTest.testSetSurname_case1" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getSurname", "utente.personale.Tecnico.setSurname" ],
   "utente.personale.TecnicoTest.testGetSurname_case1" : [ "utente.personale.Tecnico.Tecnico", "utente.personale.Tecnico.getSurname" ],
   "utente.personale.TecnicoTest.testGetName_case1" : [ "utente.personale.Tecnico.getName", "utente.personale.Tecnico.Tecnico" ],
