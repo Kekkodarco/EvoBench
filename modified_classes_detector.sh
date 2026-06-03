@@ -195,7 +195,7 @@ amber_env_before() {
   #echo 1 | sudo /usr/bin/tee /sys/devices/system/cpu/intel_pstate/no_turbo
   #echo ">>> Disabling Hyper-Threading (Intel CPUs)"
   #for cpu in {0..7}; do echo 0 | sudo /usr/bin/tee /sys/devices/system/cpu/cpu$cpu/online; done
-  if [[ "$OS" == "Windows_NT" ]] || uname -a | grep -qi mingw; then
+  if [[ "${OS:-}" == "Windows_NT" ]] || uname -a | grep -qi mingw; then
       echo ">>> [AMBER] env_before: skipped on Windows"
       return 0
     fi
@@ -223,7 +223,7 @@ amber_env_after() {
   #echo 0 | sudo /usr/bin/tee /sys/devices/system/cpu/intel_pstate/no_turbo
   #echo ">>> Re-enabling Hyper-Threading (Intel CPUs)"
   #for cpu in {0..7}; do echo 1 | sudo /usr/bin/tee /sys/devices/system/cpu/cpu$cpu/online; done
-  if [[ "$OS" == "Windows_NT" ]] || uname -a | grep -qi mingw; then
+  if [[ "${OS:-}" == "Windows_NT" ]] || uname -a | grep -qi mingw; then
       echo ">>> [AMBER] env_after: skipped on Windows"
       return 0
     fi
