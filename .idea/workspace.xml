@@ -5,9 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="4cc465a9-48fc-4272-a0d1-39b296406615" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.github/workflows/build.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/build.yml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/utente/personale/Tecnico.java" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/utente/personale/Tecnico.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -114,7 +112,7 @@
     "git-widget-placeholder": "main",
     "ignore.virus.scanning.warn.message": "true",
     "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "C:/Users/franc/IdeaProjects/AMBER",
+    "last_opened_file_path": "C:/Users/franc/IdeaProjects/chat2unittest",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -261,7 +259,7 @@
       <workItem from="1780145824284" duration="75000" />
       <workItem from="1780150484355" duration="1377000" />
       <workItem from="1780408916181" duration="3757000" />
-      <workItem from="1780489268419" duration="969000" />
+      <workItem from="1780489268419" duration="2188000" />
     </task>
     <servers />
   </component>

@@ -34,7 +34,5 @@ public class Tecnico {
     }
 
 
-    public void calcolo(int code) {
-        this.code = code;
-    }
+
 }
