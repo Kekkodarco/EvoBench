@@ -15,14 +15,11 @@ public class Tecnico {
     }
 
     public String getName() {
-        System.out.println("1");
         return name;}
 
     public String getSurname() {
-        System.out.println("ww");
         return surname;}
 
-    public String getProfession() {return profession;}
 
     public int getCode() {return code;}
 
@@ -36,9 +33,6 @@ public class Tecnico {
         this.profession = profession;
     }
 
-    public void setCode(int code) {
-        System.out.println("dddfcf");
-        this.code = code;}
 
     public void calcolo(int code) {
         this.code = code;
