@@ -10,7 +10,7 @@ AST_JAR="app/build/libs/app-all.jar"
 CHAT2UNITTEST_INPUT_BUILDER_CLASS="Chat2UnitTestInputBuilder"
 #attualmente sto usando un percorso locale per chat2unittest, successivamente dovra' essere modificato con una repo di github
 export RUN_CHAT2UNITTEST=1
-CHAT2UNITTEST_JAR="/c/Users/franc/IdeaProjects/chat2unittest/target/chat2unittest-1.0-SNAPSHOT-jar-with-dependencies.jar"
+CHAT2UNITTEST_JAR="$GITHUB_WORKSPACE/libs/chat2unittest-1.0-SNAPSHOT-jar-with-dependencies.jar"
 CHAT2UNITTEST_HOST="https://uncourtierlike-louvered-katelin.ngrok-free.dev/v1/chat/completions"
 CHAT2UNITTEST_MODEL="codellama-7b-instruct-hf"
 CHAT2UNITTEST_TEMP="0.4"
