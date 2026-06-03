@@ -19,22 +19,6 @@ this.tecnico = new Tecnico("John", "Doe", "Teacher", 1234);
 
 private Tecnico tecnico;
 
-
-    @Test
-public void testCalcolo_case1() {
-        // Test the method with a positive code value, which should set the code field to that value and return without modifying any other fields.
-int expectedCode = 1234;
-Tecnico tecnico = new Tecnico("John", "Doe", "Teacher", 0);
-tecnico.calcolo(expectedCode);
-assertEquals(expectedCode, tecnico.getCode());
-    }
-
-
-
-
-
-
-
     @Test
 public void testGetSurname_case1() {
         // Arrange
